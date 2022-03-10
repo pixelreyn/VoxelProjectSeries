@@ -2,18 +2,26 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace PixelReyn.VoxelSeries.Part2
+namespace PixelReyn.VoxelSeries.Part3
 {
     public class WorldManager : MonoBehaviour
     {
         public Material worldMaterial;
-
+        public VoxelColor[] WorldColors;
         private Container container;
 
-
-        // Start is called before the first frame update
         void Start()
         {
+            if(_instance != null)
+            {
+                if (_instance != this)
+                    Destroy(this);
+            }
+            else
+            {
+                _instance = this;
+            }
+
             GameObject cont = new GameObject("Container");
             cont.transform.parent = transform;
             container = cont.AddComponent<Container>();
@@ -31,16 +39,20 @@ namespace PixelReyn.VoxelSeries.Part2
                 }
             }
 
-
             container.GenerateMesh();
             container.UploadMesh();
         }
 
-        // Update is called once per frame
-        void Update()
+        private static WorldManager _instance;
+
+        public static WorldManager Instance
         {
-
+            get
+            {
+                if (_instance == null)
+                    _instance = FindObjectOfType<WorldManager>();
+                return _instance;
+            }
         }
-
     }
 }
