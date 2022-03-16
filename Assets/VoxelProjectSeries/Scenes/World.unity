@@ -363,7 +363,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1755072223}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 35997360c8b74f543b623a3524b58bc9, type: 3}
+  m_Script: {fileID: 11500000, guid: e0e65ef4e51bde8429033f2ff79c2aa4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  worldMaterial: {fileID: 2100000, guid: 4021f579d8ff00b4ca1a8c7d355362b3, type: 2}
+  worldMaterial: {fileID: 2100000, guid: d41578d92bc26b04bb2355aed476d2cb, type: 2}
+  WorldColors:
+  - color: {r: 0, g: 0.4834163, b: 0.9811321, a: 0}
+    metallic: 0.5
+    smoothness: 1

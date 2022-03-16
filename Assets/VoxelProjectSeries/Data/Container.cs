@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace PixelReyn.VoxelSeries.Part2
+namespace PixelReyn.VoxelSeries.Part3
 {
 
     [RequireComponent(typeof(MeshFilter))]
@@ -33,13 +33,6 @@ namespace PixelReyn.VoxelSeries.Part2
             data.Clear();
         }
 
-        private void ConfigureComponents()
-        {
-            meshFilter = GetComponent<MeshFilter>();
-            meshRenderer = GetComponent<MeshRenderer>();
-            meshCollider = GetComponent<MeshCollider>();
-        }
-
         public void GenerateMesh()
         {
             meshData.ClearData();
@@ -51,17 +44,27 @@ namespace PixelReyn.VoxelSeries.Part2
             Vector3[] faceVertices = new Vector3[4];
             Vector2[] faceUVs = new Vector2[4];
 
+            VoxelColor voxelColor;
+            Color voxelColorAlpha;
+            Vector2 voxelSmoothness;
+
             foreach (KeyValuePair<Vector3, Voxel> kvp in data)
             {
+                //Only check on solid blocks
                 if (!kvp.Value.isSolid)
                     continue;
 
                 blockPos = kvp.Key;
                 block = kvp.Value;
 
+                voxelColor = WorldManager.Instance.WorldColors[block.ID - 1];
+                voxelColorAlpha = voxelColor.color;
+                voxelColorAlpha.a = 1;
+                voxelSmoothness = new Vector2(voxelColor.metallic, voxelColor.smoothness);
                 //Iterate over each face direction
                 for (int i = 0; i < 6; i++)
                 {
+                    //Check if there's a solid block against this face
                     if (this[blockPos + voxelFaceChecks[i]].isSolid)
                         continue;
 
@@ -78,12 +81,18 @@ namespace PixelReyn.VoxelSeries.Part2
                     {
                         meshData.vertices.Add(faceVertices[voxelTris[i, j]]);
                         meshData.UVs.Add(faceUVs[voxelTris[i, j]]);
+                        meshData.colors.Add(voxelColorAlpha);
+                        meshData.UVs2.Add(voxelSmoothness);
 
                         meshData.triangles.Add(counter++);
+
                     }
                 }
+
             }
         }
+
+
 
         public void UploadMesh()
         {
@@ -93,10 +102,15 @@ namespace PixelReyn.VoxelSeries.Part2
                 ConfigureComponents();
 
             meshFilter.mesh = meshData.mesh;
-
             if (meshData.vertices.Count > 3)
                 meshCollider.sharedMesh = meshData.mesh;
+        }
 
+        private void ConfigureComponents()
+        {
+            meshFilter = GetComponent<MeshFilter>();
+            meshRenderer = GetComponent<MeshRenderer>();
+            meshCollider = GetComponent<MeshCollider>();
         }
 
         public Voxel this[Vector3 index]
@@ -128,7 +142,8 @@ namespace PixelReyn.VoxelSeries.Part2
             public List<Vector3> vertices;
             public List<int> triangles;
             public List<Vector2> UVs;
-
+            public List<Vector2> UVs2;
+            public List<Color> colors;
             public bool Initialized;
 
             public void ClearData()
@@ -138,6 +153,8 @@ namespace PixelReyn.VoxelSeries.Part2
                     vertices = new List<Vector3>();
                     triangles = new List<int>();
                     UVs = new List<Vector2>();
+                    UVs2 = new List<Vector2>();
+                    colors = new List<Color>();
 
                     Initialized = true;
                     mesh = new Mesh();
@@ -147,17 +164,20 @@ namespace PixelReyn.VoxelSeries.Part2
                     vertices.Clear();
                     triangles.Clear();
                     UVs.Clear();
+                    UVs2.Clear();
+                    colors.Clear();
 
                     mesh.Clear();
                 }
             }
-
             public void UploadMesh(bool sharedVertices = false)
             {
                 mesh.SetVertices(vertices);
                 mesh.SetTriangles(triangles, 0, false);
+                mesh.SetColors(colors);
 
                 mesh.SetUVs(0, UVs);
+                mesh.SetUVs(2, UVs2);
 
                 mesh.Optimize();
 
@@ -170,9 +190,7 @@ namespace PixelReyn.VoxelSeries.Part2
         }
         #endregion
 
-
-        #region Voxel Statics
-
+        #region Static Variables
         static readonly Vector3[] voxelVertices = new Vector3[8]
         {
             new Vector3(0,0,0),//0
@@ -185,6 +203,7 @@ namespace PixelReyn.VoxelSeries.Part2
             new Vector3(0,1,1),//6
             new Vector3(1,1,1),//7
         };
+
         static readonly Vector3[] voxelFaceChecks = new Vector3[6]
         {
             new Vector3(0,0,-1),//back
@@ -222,7 +241,7 @@ namespace PixelReyn.VoxelSeries.Part2
             {0,1,2,1,3,2},
             {0,2,3,0,3,1},
         };
-
         #endregion
     }
+
 }
