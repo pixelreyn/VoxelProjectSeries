@@ -332,6 +332,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1755072225}
   - component: {fileID: 1755072226}
+  - component: {fileID: 1755072227}
   m_Layer: 0
   m_Name: WorldManager
   m_TagString: Untagged
@@ -368,6 +369,26 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   worldMaterial: {fileID: 2100000, guid: d41578d92bc26b04bb2355aed476d2cb, type: 2}
   WorldColors:
-  - color: {r: 0, g: 0.4834163, b: 0.9811321, a: 0}
-    metallic: 0.5
-    smoothness: 1
+  - color: {r: 0, g: 0.4716981, b: 0.016664108, a: 0}
+    metallic: 0.2
+    smoothness: 0.8
+  - color: {r: 0.5471698, g: 0.29994953, b: 0, a: 0}
+    metallic: 0.6
+    smoothness: 0.2
+  worldSettings:
+    containerSize: 128
+    maxHeight: 128
+  container: {fileID: 0}
+--- !u!114 &1755072227
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1755072223}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 401d9a643238c3140ad97c19969216ac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  noiseShader: {fileID: 7200000, guid: 2f02a6167301c774d83b7600a477ddac, type: 3}
