@@ -1,0 +1,117 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#include "VoxelValues.compute"
+
+struct VoxelColor32
+{
+    float color;
+    float metallic;
+    float smoothness;
+};
+
+struct Voxel {
+    int ID;
+};
+
+StructuredBuffer<VoxelColor32> voxelColors;
+RWStructuredBuffer<Voxel> voxelArray;
+RWStructuredBuffer<float3> vertexBuffer;
+RWStructuredBuffer<float4> colorBuffer;
+RWStructuredBuffer<int> indexBuffer;
+RWStructuredBuffer<uint> counter;
+
+float3 chunkPosition;
+
+uint containerSizeX;
+uint containerSizeY;
+
+
+float packFloats(float xF, float yF)
+{
+    float2 output = float2(xF, yF);
+    output.x = floor(output.x * (100 - 1));
+    output.y = floor(output.y * (100 - 1));
+
+    return (output.x * 100) + output.y;
+}
+
+float packFloats(float2 xy)
+{
+    float2 output = xy;
+    output.x = floor(output.x * (100 - 1));
+    output.y = floor(output.y * (100 - 1));
+
+    return (output.x * 100) + output.y;
+}
+
+
+float2 unpackFloats(float f)
+{
+    int input = int(f);
+
+    float x = input >> 8 & 0xff;
+    float y = input >> 0 & 0xff;
+
+    return float2(x, y);
+}
+
+uint flattenCoord(uint3 idx)
+{
+    return idx.x + (idx.y * (containerSizeX + 3)) + (idx.z * (containerSizeX + 3) * (containerSizeY + 1));
+}
+
+bool VoxelIsSolid(uint3 pos)
+{
+    return voxelArray[flattenCoord(pos)].ID != 0;
+}
+
+
+[numthreads(8,8,8)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xz > containerSizeX) || any(id.xz < 1))
+        return;
+    
+    Voxel block = voxelArray[flattenCoord(id)];
+
+    if (block.ID == 0)
+        return;
+    
+    float3 faceVertices[4];
+    float2 faceUVs[4];
+    float4 color = float4(voxelColors[block.ID - 1].color, packFloats(voxelColors[block.ID - 1].metallic, voxelColors[block.ID - 1].smoothness), 0, 0);
+    uint vertCount = 0;
+    uint triCount = 0;
+    for (int i = 0; i < 6; i++)
+    {
+        
+        //Check if there's a solid block against this face
+        if (VoxelIsSolid(id + voxelFaceChecks[i]))
+            continue;
+        
+        //Draw this face
+        counter.IncrementCounter();
+        InterlockedAdd(counter[0], 6, vertCount);
+        InterlockedAdd(counter[1], 6, triCount); //not used here, but will be used in a shared vertex configuration
+        
+
+        //Collect the appropriate vertices from the default vertices and add the block position
+        for (int j = 0; j < 4; j++)
+        {
+            faceVertices[j] = voxelVertices[voxelVertexIndex[i][j]] + id + chunkPosition;
+            faceUVs[j] = voxelUVs[j];
+        }
+        
+        for (int k = 0; k < 6; k++)
+        {
+            vertexBuffer[vertCount + k] = faceVertices[voxelTris[i][k]];
+            color.b = faceUVs[voxelTris[i][k]].x;
+            color.a = faceUVs[voxelTris[i][k]].y;
+            colorBuffer[vertCount + k] = color;
+            
+            indexBuffer[triCount + k] = vertCount + k;
+        }
+
+    }
+}
+    

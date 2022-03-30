@@ -8,65 +8,147 @@ struct Voxel {
     int ID;
 };
 
+struct NoiseLayer {
+    float gain;
+    float frequency;
+    float lacunarity;
+    float persistence;
+    int octaves;
+
+    float caveScale;
+    float caveThreshold;
+
+    int surfaceVoxelId;
+    int subSurfaceVoxelId;
+};
+
+struct HeightAndnoise {
+    uint height;
+    uint noiseIndex;
+};
+
+StructuredBuffer<NoiseLayer> noiseArray;
 RWStructuredBuffer<Voxel> voxelArray;
 RWStructuredBuffer<uint> count;
 
 float3 chunkPosition;
 float3 seedOffset;
 
-int containerSizeX;
-int containerSizeY;
+uint containerSizeX;
+uint containerSizeY;
 
 bool generateCaves;
 bool forceFloor;
 
 uint maxHeight;
 uint oceanHeight;
-
-float noiseScale;
-float caveScale;
-float caveThreshold;
-
-int surfaceVoxelID;
-int subSurfaceVoxelID;
+int noiseCount;
+int seed;
 
 int flattenCoord(uint3 idx)
 {
     return idx.x + (idx.y * (containerSizeX + 3)) + (idx.z * (containerSizeX + 3) * (containerSizeY + 1));
 }
 
+float evaluateNoise(float3 pos, float terrainHeight)
+{
+    float h = 1;
+    float G = exp2(-h);
+    float f = 1;
+    float a = 1;
+    float t = 0;
+    
+    for (int i = 0; i < 4; i++)
+    {
+        t += a * snoise(f * (pos / (noiseArray[0].caveScale / ((uint) terrainHeight > oceanHeight ? 1 : 6))));
+        f *= 2.0;
+        a *= G;
+    }
+    return t;
+}
+
+float fractalNoise(float2 pos, int noisePosition)
+{
+    float v = 0;
+    float amplitude = 1;
+    
+    NoiseLayer b = noiseArray[noisePosition];
+    float3 p1 = float3(pos.xy, seed);
+    for (int i = 0; i < noiseArray[noisePosition].octaves; i++)
+    {
+        v += snoise(float3(p1.xy / b.frequency, seed)) * amplitude;
+
+        p1.xy *= b.lacunarity;
+        
+        amplitude *= b.persistence;
+    }
+    v = v * v;
+    return clamp(v, 0, 1);
+}
+
+
+
+HeightAndnoise
+    sampleHeightAtPoint(
+    float2 pos) {
+    float height = 0;
+
+    float strongestWeight = 0;
+
+    uint count = 0;
+    uint noiseIndex = 0;
+    float heightWeight;
+    int i = 0;
+    
+    float weightH = fractalNoise(pos, i);
+    
+
+        height = clamp((weightH * 240), 0, 250);
+    
+        
+
+    HeightAndnoise hb;
+    hb.height = round(height);
+    hb.noiseIndex = noiseIndex;
+    return hb;
+}
+
+
+
 [numthreads(8, 8, 8)]
 void FillArray(uint3 id : SV_DispatchThreadID)
 {
     if (any(id.xz > containerSizeX + 2))
         return;
-
+    
     float3 pos = id + chunkPosition + seedOffset;
     float2 posXZ = pos.xz;
 
-    float height = snoise(posXZ * noiseScale) * (maxHeight);
-    uint roundHeight = round(height);
+    HeightAndnoise hb = sampleHeightAtPoint(posXZ);
+    uint terrainHeight = hb.height;
+    NoiseLayer selectednoise = noiseArray[hb.noiseIndex];
     Voxel vox;
     vox.ID = 0;
 
-    if (id.y > roundHeight)
+    if (id.y > terrainHeight)
     {
         vox.ID = 0;
         voxelArray[flattenCoord(id)] = vox;
         return;
     }
 
-    bool isSurfaceBlock = id.y >= roundHeight - 3;
+    bool isSurfaceBlock = id.y >= terrainHeight - 3;
 
-    vox.ID = isSurfaceBlock ? surfaceVoxelID : subSurfaceVoxelID;
-
-    if (generateCaves && snoise(pos * caveScale) > caveThreshold)
+    vox.ID = isSurfaceBlock ? selectednoise.surfaceVoxelId : selectednoise.subSurfaceVoxelId;
+    
+    if (generateCaves && evaluateNoise(pos, terrainHeight) > selectednoise.caveThreshold)
     {
         vox.ID = 0;
     }
 
     if (id.y <= 1 && forceFloor)
-        vox.ID = subSurfaceVoxelID;
+        vox.ID = selectednoise.surfaceVoxelId;
+
 
     if (vox.ID != 0)
         count.IncrementCounter();
