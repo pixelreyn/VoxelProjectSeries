@@ -481,7 +481,7 @@ MonoBehaviour:
       serializedVersion: 2
       rgba: 4278227736
     metallic: 0.1
-    smoothness: 0.5
+    smoothness: 0.2
   - color:
       serializedVersion: 2
       rgba: 4278202742
@@ -497,10 +497,20 @@ MonoBehaviour:
       rgba: 0
     metallic: 0.6
     smoothness: 0.2
+  voxelTextures:
+  - texture: {fileID: 2800000, guid: 0dc0649bf1b30484099e1017ce7953bc, type: 3}
+    smoothness: 0.5
+    metallic: 0.1
+  - texture: {fileID: 2800000, guid: 08183065da9e3d0468b22fe0e8408fb0, type: 3}
+    smoothness: 0.1
+    metallic: 0.6
+  tex2DArray: {fileID: 18700000, guid: c11853c174938aa4b8a25676989489b5, type: 2}
   worldSettings:
-    containerSize: 16
+    chunkSize: 16
     maxHeight: 256
     renderDistance: 64
+    sharedVertices: 0
+    useTextures: 1
   mainCamera: {fileID: 414495109}
   maxChunksToProcessPerFrame: 8
 --- !u!114 &1755072227

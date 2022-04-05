@@ -1,6 +1,6 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
-#include "VoxelValues.compute"
+#include "VoxelValues.cginc"
 
 struct VoxelColor32
 {
@@ -13,18 +13,26 @@ struct Voxel {
     int ID;
 };
 
+struct sharedVert
+{
+    uint index;
+    bool set;
+};
+
 StructuredBuffer<VoxelColor32> voxelColors;
 RWStructuredBuffer<Voxel> voxelArray;
 RWStructuredBuffer<float3> vertexBuffer;
+RWStructuredBuffer<float3> normalBuffer;
 RWStructuredBuffer<float4> colorBuffer;
 RWStructuredBuffer<int> indexBuffer;
 RWStructuredBuffer<uint> counter;
 
 float3 chunkPosition;
 
-uint containerSizeX;
-uint containerSizeY;
-
+uint chunkSizeX;
+uint chunkSizeY;
+bool sharedVertices;
+bool useTextures;
 
 float packFloats(float xF, float yF)
 {
@@ -44,7 +52,6 @@ float packFloats(float2 xy)
     return (output.x * 100) + output.y;
 }
 
-
 float2 unpackFloats(float f)
 {
     int input = int(f);
@@ -57,7 +64,7 @@ float2 unpackFloats(float f)
 
 uint flattenCoord(uint3 idx)
 {
-    return idx.x + (idx.y * (containerSizeX + 3)) + (idx.z * (containerSizeX + 3) * (containerSizeY + 1));
+    return idx.x + (idx.y * (chunkSizeX + 3)) + (idx.z * (chunkSizeX + 3) * (chunkSizeY + 1));
 }
 
 bool VoxelIsSolid(uint3 pos)
@@ -65,11 +72,73 @@ bool VoxelIsSolid(uint3 pos)
     return voxelArray[flattenCoord(pos)].ID != 0;
 }
 
+static uint3 getCellCenterForIDX(int idx, int axis, int corner)
+{
+    uint3 cellCenter = CellCentersByAxis[axis][corner];
+    if (voxelVertices[idx].x == 1 && CellCentersByAxis[axis][corner].x == -1)
+        cellCenter.x = 1;
+
+    if (voxelVertices[idx].y == 1 && CellCentersByAxis[axis][corner].y == -1)
+        cellCenter.y = 1;
+
+    if (voxelVertices[idx].z == 1 && CellCentersByAxis[axis][corner].z == -1)
+        cellCenter.z = 1;
+
+    return cellCenter;
+}
+
+void calculateContour(uint3 blockCoord, out float3 position, out float3 normal, float3 vertexPos, int idx)
+{
+    Voxel currentCell, adjacentCell, adjacentRootCell;
+    float adjacentCellDensitiy = 0, adjacentRootCellDensity = 0;
+    float3 adjacentCellPos;
+    float3 adjacentCellRoot;
+    float3 liveCellPos;
+    uint3 vWorldPos = blockCoord + vertexPos; //take local block coord, add the cubed position
+    int counter = 0;
+    currentCell = voxelArray[flattenCoord(blockCoord)];
+
+    for (int ax = 0; ax < 3; ax++)
+    {
+        for (int corner = 0; corner < 4; corner++)
+        {
+                
+            adjacentCellRoot = blockCoord + getCellCenterForIDX(idx, ax, corner);
+            adjacentCellPos = adjacentCellRoot + axis[idx][ax];
+
+            adjacentRootCell = voxelArray[flattenCoord(adjacentCellRoot)];
+            adjacentCell = voxelArray[flattenCoord(adjacentCellPos)];
+
+
+            adjacentRootCellDensity = adjacentRootCell.ID != 0 ? 1 : 0;
+            adjacentCellDensitiy = adjacentCell.ID != 0 ? 1 : 0;
+            
+            normal += (adjacentCellDensitiy - adjacentRootCellDensity) * -axis[idx][ax];
+            if (adjacentRootCellDensity != adjacentCellDensitiy)
+            {
+                liveCellPos = adjacentCell.ID != 0 ? adjacentCellPos : adjacentCellRoot;
+                adjacentCellPos = adjacentCell.ID == 0 ? adjacentCellPos : adjacentCellRoot;
+                
+                position += adjacentCellPos + ((liveCellPos - adjacentCellPos) * getCellCenterForIDX(idx, ax, corner)) / 2; //lerp(adjacentCellRoot + ((float3) (adjacentCellPos - adjacentCellRoot) * ((0 - adjacentRootCellDensity) / (adjacentCellDensitiy - adjacentRootCellDensity))), vWorldPos, 0); //change 0 to byte value
+                counter++;
+            }
+        }
+    }
+    
+    if (counter == 0)
+    {
+        position = vWorldPos;
+        counter = 1;
+    }
+    normal /= counter;
+    position /= counter;
+
+}
 
 [numthreads(8,8,8)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
-    if (any(id.xz > containerSizeX) || any(id.xz < 1))
+    if (any(id.xz > chunkSizeX) || any(id.xz < 1))
         return;
     
     Voxel block = voxelArray[flattenCoord(id)];
@@ -78,10 +147,17 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         return;
     
     float3 faceVertices[4];
-    float2 faceUVs[4];
-    float4 color = float4(voxelColors[block.ID - 1].color, packFloats(voxelColors[block.ID - 1].metallic, voxelColors[block.ID - 1].smoothness), 0, 0);
+    float3 faceNorms[4];
+    float4 color = float4(useTextures ? (((float)block.ID - 1) / 100) : voxelColors[block.ID - 1].color, packFloats(voxelColors[block.ID - 1].metallic, voxelColors[block.ID - 1].smoothness), 0, 0);
     uint vertCount = 0;
     uint triCount = 0;
+    
+    sharedVert sharedVerts[8];
+    for (int i = 0; i < 8; i++)
+    {
+        sharedVerts[i].set = false;
+        sharedVerts[i].index = 0;
+    }
     for (int i = 0; i < 6; i++)
     {
         
@@ -91,27 +167,56 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         
         //Draw this face
         counter.IncrementCounter();
-        InterlockedAdd(counter[0], 6, vertCount);
-        InterlockedAdd(counter[1], 6, triCount); //not used here, but will be used in a shared vertex configuration
-        
 
         //Collect the appropriate vertices from the default vertices and add the block position
-        for (int j = 0; j < 4; j++)
+        if (!sharedVertices)
         {
-            faceVertices[j] = voxelVertices[voxelVertexIndex[i][j]] + id + chunkPosition;
-            faceUVs[j] = voxelUVs[j];
-        }
-        
-        for (int k = 0; k < 6; k++)
-        {
-            vertexBuffer[vertCount + k] = faceVertices[voxelTris[i][k]];
-            color.b = faceUVs[voxelTris[i][k]].x;
-            color.a = faceUVs[voxelTris[i][k]].y;
-            colorBuffer[vertCount + k] = color;
+            InterlockedAdd(counter[0], 6, vertCount);
+            InterlockedAdd(counter[1], 6, triCount);
             
-            indexBuffer[triCount + k] = vertCount + k;
+            for (int j = 0; j < 4; j++)
+            {
+                calculateContour(id, faceVertices[j], faceNorms[j], voxelVertices[voxelVertexIndex[i][j]], voxelVertexIndex[i][j]);
+                faceVertices[j] += chunkPosition;
+            }
+        
+            for (int k = 0; k < 6; k++)
+            {
+                vertexBuffer[vertCount + k] = faceVertices[voxelTris[i][k]];
+                color.b = voxelUVs[voxelTris[i][k]].x;
+                color.a = voxelUVs[voxelTris[i][k]].y;
+                colorBuffer[vertCount + k] = color;
+                indexBuffer[triCount + k] = vertCount + k;
+            }
         }
+        else
+        {
+            InterlockedAdd(counter[1], 6, triCount);
+            for (int k = 0; k < 6; k++)
+            {
+                int idx = voxelTrisMapped[i][k];
+                if (!sharedVerts[idx].set)
+                {
+                    InterlockedAdd(counter[0], 1, vertCount);
+                    
+                    float3 vert;
+                    float3 norm;
+                    calculateContour(id, vert, norm, voxelVertices[idx], idx);
+                    sharedVerts[idx].set = true;
+                    sharedVerts[idx].index = vertCount;
+                    
+                    color.b = voxelUVs[voxelTris[i][k]].x;
+                    color.a = voxelUVs[voxelTris[i][k]].y;
+                    
+                    vertexBuffer[vertCount] = vert + chunkPosition;
+                    normalBuffer[vertCount] = norm;
+                    colorBuffer[vertCount] = color;
+                }
+                
+                indexBuffer[triCount + k] = sharedVerts[idx].index;
+            }
 
+        }
     }
 }
     
