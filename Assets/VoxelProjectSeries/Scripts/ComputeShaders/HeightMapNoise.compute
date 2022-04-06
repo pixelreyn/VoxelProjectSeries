@@ -34,8 +34,8 @@ RWStructuredBuffer<uint> count;
 float3 chunkPosition;
 float3 seedOffset;
 
-uint containerSizeX;
-uint containerSizeY;
+uint chunkSizeX;
+uint chunkSizeY;
 
 bool generateCaves;
 bool forceFloor;
@@ -47,7 +47,7 @@ int seed;
 
 int flattenCoord(uint3 idx)
 {
-    return idx.x + (idx.y * (containerSizeX + 3)) + (idx.z * (containerSizeX + 3) * (containerSizeY + 1));
+    return idx.x + (idx.y * (chunkSizeX + 3)) + (idx.z * (chunkSizeX + 3) * (chunkSizeY + 1));
 }
 
 float evaluateNoise(float3 pos, float terrainHeight)
@@ -113,12 +113,10 @@ HeightAndnoise
     return hb;
 }
 
-
-
 [numthreads(8, 8, 8)]
 void FillArray(uint3 id : SV_DispatchThreadID)
 {
-    if (any(id.xz > containerSizeX + 2))
+    if (any(id.xz > chunkSizeX + 2))
         return;
     
     float3 pos = id + chunkPosition + seedOffset;
@@ -151,7 +149,7 @@ void FillArray(uint3 id : SV_DispatchThreadID)
 
 
     if (vox.ID != 0)
-        count.IncrementCounter();
+        InterlockedAdd(count[0], 1);
 
     voxelArray[flattenCoord(id)] = vox;
 }

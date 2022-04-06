@@ -12,6 +12,7 @@ public class WorldManager : MonoBehaviour
 {
     public Material worldMaterial;
     public VoxelColor[] WorldColors;
+    public VoxelTexture[] voxelTextures;
     public WorldSettings worldSettings;
 
     public Transform mainCamera;
@@ -20,10 +21,12 @@ public class WorldManager : MonoBehaviour
 
     //This will contain all modified voxels, structures, whatnot for all chunks, and will effectively be our saving mechanism
     public ConcurrentDictionary<Vector3, Dictionary<Vector3, Voxel>> modifiedVoxels = new ConcurrentDictionary<Vector3, Dictionary<Vector3, Voxel>>();
-    public ConcurrentDictionary<Vector3, Container> activeContainers;
-    public Queue<Container> containerPool;
-    ConcurrentQueue<Vector3> containersNeedCreation = new ConcurrentQueue<Vector3>();
-    ConcurrentQueue<Vector3> deactiveContainers = new ConcurrentQueue<Vector3>();
+    public ConcurrentDictionary<Vector3, Chunk> activeChunks;
+    public Queue<Chunk> chunkPool;
+    public Queue<MeshData> meshDataPool;
+    private List<MeshData> allMeshData;
+    ConcurrentQueue<Vector3> chunksNeedCreation = new ConcurrentQueue<Vector3>();
+    ConcurrentQueue<Vector3> deactiveChunks = new ConcurrentQueue<Vector3>();
 
     public int maxChunksToProcessPerFrame = 6;
     int mainThreadID;
@@ -50,18 +53,31 @@ public class WorldManager : MonoBehaviour
         WorldSettings = worldSettings;
 
         int renderSizePlusExcess = WorldSettings.renderDistance + 3;
-        int totalContainers = renderSizePlusExcess * renderSizePlusExcess;
+        int totalChunks = renderSizePlusExcess * renderSizePlusExcess;
 
-        ComputeManager.Instance.Initialize(6 * 3);
+        ComputeManager.Instance.Initialize(maxChunksToProcessPerFrame * 3);
 
-        activeContainers = new ConcurrentDictionary<Vector3, Container>();
-        containerPool = new Queue<Container>();
+        if(worldMaterial.shader.name.Contains("Tex") && voxelTextures.Length > 0)
+        {
+            Debug.Log("Trying to use Textures!");
+            worldMaterial.SetTexture("_TextureArray", GenerateTextureArray());
+        }
+
+        activeChunks = new ConcurrentDictionary<Vector3, Chunk>();
+        chunkPool = new Queue<Chunk>();
+        meshDataPool = new Queue<MeshData>();
+        allMeshData = new List<MeshData>();
 
         mainThreadID = Thread.CurrentThread.ManagedThreadId;
 
-        for (int i = 0; i < totalContainers; i++)
+        for(int i = 0; i < maxChunksToProcessPerFrame * 3; i++)
         {
-            GenerateContainer(Vector3.zero, true);
+            GenerateMeshData(true);
+        }
+
+        for (int i = 0; i < totalChunks; i++)
+        {
+            GenerateChunk(Vector3.zero, true);
         }
         checkActiveChunks = new Thread(CheckActiveChunksLoop);
         checkActiveChunks.Priority = System.Threading.ThreadPriority.BelowNormal;
@@ -79,18 +95,18 @@ public class WorldManager : MonoBehaviour
 
         Vector3 contToMake; 
         
-        while (deactiveContainers.Count > 0 && deactiveContainers.TryDequeue(out contToMake))
+        while (deactiveChunks.Count > 0 && deactiveChunks.TryDequeue(out contToMake))
         {
-            deactiveContainer(contToMake);
+            deactiveChunk(contToMake);
         }
         for (int x = 0; x < maxChunksToProcessPerFrame; x++)
         {
-            if (x < maxChunksToProcessPerFrame&& containersNeedCreation.Count > 0 && containersNeedCreation.TryDequeue(out contToMake))
+            if (x < maxChunksToProcessPerFrame&& chunksNeedCreation.Count > 0 && chunksNeedCreation.TryDequeue(out contToMake))
             {
-                Container container = GetContainer(contToMake);
-                container.containerPosition = contToMake;
-                activeContainers.TryAdd(contToMake, container);
-                ComputeManager.Instance.GenerateVoxelData(container, contToMake);
+                Chunk chunk = GetChunk(contToMake);
+                chunk.chunkPosition = contToMake;
+                activeChunks.TryAdd(contToMake, chunk);
+                ComputeManager.Instance.GenerateVoxelData(chunk, contToMake);
                 x++;
             }
 
@@ -105,7 +121,7 @@ public class WorldManager : MonoBehaviour
         Vector3 pos = Vector3.zero;
 
         Bounds chunkBounds = new Bounds();
-        chunkBounds.size = new Vector3(renderDistPlus1 * WorldSettings.containerSize, 1, renderDistPlus1 * WorldSettings.containerSize);
+        chunkBounds.size = new Vector3(renderDistPlus1 * WorldSettings.chunkSize, 1, renderDistPlus1 * WorldSettings.chunkSize);
         while (true && !killThreads)
         {
             if (previouslyCheckedPosition != lastUpdatedPosition || !performedFirstPass)
@@ -115,21 +131,21 @@ public class WorldManager : MonoBehaviour
                 for (int x = -halfRenderSize; x < halfRenderSize; x++)
                     for (int z = -halfRenderSize; z < halfRenderSize; z++)
                     {
-                        pos.x = x * WorldSettings.containerSize + previouslyCheckedPosition.x;
-                        pos.z = z * WorldSettings.containerSize + previouslyCheckedPosition.z;
+                        pos.x = x * WorldSettings.chunkSize + previouslyCheckedPosition.x;
+                        pos.z = z * WorldSettings.chunkSize + previouslyCheckedPosition.z;
 
-                        if (!activeContainers.ContainsKey(pos))
+                        if (!activeChunks.ContainsKey(pos))
                         {
-                            containersNeedCreation.Enqueue(pos);
+                            chunksNeedCreation.Enqueue(pos);
                         }
                     }
 
                 chunkBounds.center = previouslyCheckedPosition;
 
-                foreach (var kvp in activeContainers)
+                foreach (var kvp in activeChunks)
                 {
                     if (!chunkBounds.Contains(kvp.Key))
-                        deactiveContainers.Enqueue(kvp.Key);
+                        deactiveChunks.Enqueue(kvp.Key);
                 }
             }
 
@@ -141,48 +157,48 @@ public class WorldManager : MonoBehaviour
         Profiler.EndThreadProfiling();
     }
 
-    #region Container Pooling
-    public Container GetContainer(Vector3 pos)
+    #region Chunk Pooling
+    public Chunk GetChunk(Vector3 pos)
     {
-        if(containerPool.Count > 0)
+        if(chunkPool.Count > 0)
         {
-            return containerPool.Dequeue();
+            return chunkPool.Dequeue();
         }
         else
         {
-            return GenerateContainer(pos, false);
+            return GenerateChunk(pos, false);
         }
     }
 
-    Container GenerateContainer(Vector3 position, bool enqueue = true)
+    Chunk GenerateChunk(Vector3 position, bool enqueue = true)
     {
         if(Thread.CurrentThread.ManagedThreadId != mainThreadID)
         {
-            containersNeedCreation.Enqueue(position);
+            chunksNeedCreation.Enqueue(position);
             return null;
         }
-        Container container = new GameObject().AddComponent<Container>();
-        container.transform.parent = transform;
-        container.containerPosition = position;
-        container.Initialize(worldMaterial, position);
+        Chunk chunk = new GameObject().AddComponent<Chunk>();
+        chunk.transform.parent = transform;
+        chunk.chunkPosition = position;
+        chunk.Initialize(worldMaterial, position);
 
         if (enqueue)
         {
-            container.gameObject.SetActive(false);
-            containerPool.Enqueue(container);
+            chunk.gameObject.SetActive(false);
+            chunkPool.Enqueue(chunk);
         }
 
-        return container;
+        return chunk;
     }
 
-    public bool deactiveContainer(Vector3 position)
+    public bool deactiveChunk(Vector3 position)
     {
-        if (activeContainers.ContainsKey(position))
+        if (activeChunks.ContainsKey(position))
         {
-            if (activeContainers.TryRemove(position, out Container c))
+            if (activeChunks.TryRemove(position, out Chunk c))
             {
                 c.ClearData();
-                containerPool.Enqueue(c);
+                chunkPool.Enqueue(c);
                 c.gameObject.SetActive(false);
                 return true;
             }
@@ -195,10 +211,45 @@ public class WorldManager : MonoBehaviour
     }
     #endregion
 
+    #region MeshData Pooling
+    public MeshData GetMeshData()
+    {
+        if (meshDataPool.Count > 0)
+        {
+            return meshDataPool.Dequeue();
+        }
+        else
+        {
+            return GenerateMeshData(false);
+        }
+    }
+
+    MeshData GenerateMeshData(bool enqueue = true)
+    {
+
+        MeshData meshData = new MeshData();
+        meshData.Initialize();
+
+        if (enqueue)
+        {
+            meshDataPool.Enqueue(meshData);
+        }
+
+        return meshData;
+    }
+
+    public void ClearAndRequeueMeshData(MeshData data)
+    {
+        data.ClearArrays();
+        meshDataPool.Enqueue(data);
+    }
+
+    #endregion
+
     public static Vector3 positionToChunkCoord(Vector3 pos)
     {
-        pos /= WorldSettings.containerSize;
-        pos = math.floor(pos) * WorldSettings.containerSize;
+        pos /= WorldSettings.chunkSize;
+        pos = math.floor(pos) * WorldSettings.chunkSize;
         pos.y = 0;
         return pos;
     }
@@ -208,9 +259,9 @@ public class WorldManager : MonoBehaviour
         killThreads = true;
         checkActiveChunks?.Abort();
 
-        foreach(var c in activeContainers.Keys)
+        foreach(var c in activeChunks.Keys)
         {
-            if(activeContainers.TryRemove(c, out var cont))
+            if(activeChunks.TryRemove(c, out var cont))
             {
                 cont.Dispose();
             }
@@ -235,17 +286,41 @@ public class WorldManager : MonoBehaviour
             return _instance;
         }
     }
+
+    public Texture2DArray GenerateTextureArray()
+    {
+
+        if (voxelTextures.Length > 0)
+        {
+            Texture2D tex = voxelTextures[0].texture;
+            Texture2DArray texArrayAlbedo = new Texture2DArray(tex.width, tex.height, voxelTextures.Length, tex.format, tex.mipmapCount > 1);
+            texArrayAlbedo.anisoLevel = tex.anisoLevel;
+            texArrayAlbedo.filterMode = tex.filterMode;
+            texArrayAlbedo.wrapMode = tex.wrapMode;
+
+            for (int i = 0; i < voxelTextures.Length; i++)
+            {
+                Graphics.CopyTexture(voxelTextures[i].texture, 0, 0, texArrayAlbedo, i, 0);
+            }
+
+            return texArrayAlbedo;
+        }
+        Debug.Log("No Textures found while trying to generate Tex2DArray");
+
+        return null;
+    }
 }
 
 [System.Serializable]
 public class WorldSettings
 {
-    public int containerSize = 16;
+    public int chunkSize = 16;
     public int maxHeight = 128;
     public int renderDistance = 32;
-
+    public bool sharedVertices = false;
+    public bool useTextures = false;
     public int ChunkCount
     {
-        get { return (containerSize + 3) *( maxHeight+ 1) * (containerSize+ 3); }
+        get { return (chunkSize + 3) *( maxHeight+ 1) * (chunkSize+ 3); }
     }
 }
