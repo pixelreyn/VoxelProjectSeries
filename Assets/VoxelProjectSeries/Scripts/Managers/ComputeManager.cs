@@ -26,20 +26,6 @@ public class ComputeManager : MonoBehaviour
     public int seed;
     public NoiseLayers[] noiseLayers;
 
-
-    static float ColorfTo32(Color32 c)
-    {
-        if (c.r == 0)
-            c.r = 1;
-        if (c.g == 0)
-            c.g = 1;
-        if (c.b == 0)
-            c.b = 1;
-        if (c.a == 0)
-            c.a = 1;
-        return (c.r << 24) | (c.g << 16) | (c.b << 8) | (c.a);
-    }
-
     public void Initialize(int count = 18)
     {
         xThreads = WorldManager.WorldSettings.chunkSize / 8 + 1;
@@ -61,34 +47,10 @@ public class ComputeManager : MonoBehaviour
         noiseShader.SetBuffer(0, "noiseArray", noiseLayersArray);
         noiseShader.SetInt("noiseCount", noiseLayers.Length);
 
-        VoxelColor32[] converted = new VoxelColor32[WorldManager.Instance.WorldColors.Length];
-        int cCount = 0;
+        VoxelDetails[] convertedVoxelDetails = getVoxelDetails();
 
-        if (WorldManager.WorldSettings.useTextures)
-        {
-            foreach (VoxelTexture c in WorldManager.Instance.voxelTextures)
-            {
-                VoxelColor32 b = new VoxelColor32();
-                b.color = 0;
-                b.smoothness = c.smoothness;
-                b.metallic = c.metallic;
-                converted[cCount++] = b;
-            }
-        }
-        else
-        {
-            foreach (VoxelColor c in WorldManager.Instance.WorldColors)
-            {
-                VoxelColor32 b = new VoxelColor32();
-                b.color = ColorfTo32(c.color);
-                b.smoothness = c.smoothness;
-                b.metallic = c.metallic;
-                converted[cCount++] = b;
-            }
-        }
-
-        voxelColorsArray = new ComputeBuffer(converted.Length, 12);
-        voxelColorsArray.SetData(converted);
+        voxelColorsArray = new ComputeBuffer(convertedVoxelDetails.Length, 12);
+        voxelColorsArray.SetData(convertedVoxelDetails);
 
         voxelShader.SetBuffer(0, "voxelColors", voxelColorsArray);
         voxelShader.SetInt("chunkSizeX", WorldManager.WorldSettings.chunkSize);
@@ -107,7 +69,8 @@ public class ComputeManager : MonoBehaviour
 
         NoiseBuffer noiseBuffer = GetNoiseBuffer();
         noiseBuffer.countBuffer.SetCounterValue(0);
-        noiseBuffer.countBuffer.SetData(new uint[] { 0 });
+        noiseBuffer.countBuffer.SetData(new uint[] { 0, 0 });
+        noiseShader.SetBuffer(0, "specialBlocksBuffer", noiseBuffer.specialBlocksBuffer);
         noiseShader.SetBuffer(0, "voxelArray", noiseBuffer.noiseBuffer);
         noiseShader.SetBuffer(0, "count", noiseBuffer.countBuffer);
 
@@ -116,12 +79,28 @@ public class ComputeManager : MonoBehaviour
 
         noiseShader.Dispatch(0, xThreads, yThreads, xThreads);
 
-        MeshBuffer meshBuffer = GetMeshBuffer();
+        AsyncGPUReadback.Request(noiseBuffer.countBuffer, (callback) =>
+        {
+            if (WorldManager.Instance.activeChunks.ContainsKey(pos))
+            {
+                WorldManager.Instance.activeChunks[pos].ProcessNoiseForStructs(noiseBuffer);
+            }
+            else
+            {
+                Debug.Log("Noise generated for inactive chunk at: " + pos);
+                ClearAndRequeueBuffer(noiseBuffer);
+            }
+
+        });
+    }
+
+    public void GenerateVoxelMesh(Vector3 pos, MeshBuffer meshBuffer)
+    {
         meshBuffer.countBuffer.SetCounterValue(0);
         meshBuffer.countBuffer.SetData(new uint[] { 0, 0 });
-        voxelShader.SetVector("chunkPosition", cont.chunkPosition);
+        voxelShader.SetVector("chunkPosition", pos);
 
-        voxelShader.SetBuffer(0, "voxelArray", noiseBuffer.noiseBuffer);
+        voxelShader.SetBuffer(0, "voxelArray", meshBuffer.modifiedNoiseBuffer);
         voxelShader.SetBuffer(0, "counter", meshBuffer.countBuffer);
         voxelShader.SetBuffer(0, "vertexBuffer", meshBuffer.vertexBuffer);
         voxelShader.SetBuffer(0, "normalBuffer", meshBuffer.normalBuffer);
@@ -135,8 +114,11 @@ public class ComputeManager : MonoBehaviour
             {
                 WorldManager.Instance.activeChunks[pos].UploadMesh(meshBuffer);
             }
-            ClearAndRequeueBuffer(noiseBuffer);
-            ClearAndRequeueBuffer(meshBuffer);
+            else
+            {
+                Debug.Log("Generated mesh for inactive chunk at: " + pos);
+                ClearAndRequeueBuffer(meshBuffer);
+            }
 
         });
     }
@@ -231,6 +213,36 @@ public class ComputeManager : MonoBehaviour
     }
 
 
+    static float ColorfTo32(Color32 c)
+    {
+        if (c.r == 0)
+            c.r = 1;
+        if (c.g == 0)
+            c.g = 1;
+        if (c.b == 0)
+            c.b = 1;
+        if (c.a == 0)
+            c.a = 1;
+        return (c.r << 24) | (c.g << 16) | (c.b << 8) | (c.a);
+    }
+
+    VoxelDetails[] getVoxelDetails()
+    {
+        VoxelDetails[] voxelDetails = new VoxelDetails[WorldManager.Instance.voxelDetails.Length];
+        int count = 0;
+        foreach (Voxels vT in WorldManager.Instance.voxelDetails)
+        {
+            VoxelDetails vD = new VoxelDetails();
+            vD.color = WorldManager.WorldSettings.useTextures && vT.texture != null ? -1 : ColorfTo32(vT.color);
+            vD.smoothness = vT.smoothness;
+            vD.metallic = vT.metallic;
+
+            voxelDetails[count++] = vD;
+        }
+        return voxelDetails;
+    }
+
+
     private static ComputeManager _instance;
 
     public static ComputeManager Instance
@@ -244,20 +256,22 @@ public class ComputeManager : MonoBehaviour
     }
 }
 
-public struct NoiseBuffer
+public class NoiseBuffer
 {
     public ComputeBuffer noiseBuffer;
     public ComputeBuffer countBuffer;
+    public ComputeBuffer specialBlocksBuffer;
+    public IndexedArray<Voxel> voxelArray;
     public bool Initialized;
     public bool Cleared;
 
     public void InitializeBuffer()
     {
-        countBuffer = new ComputeBuffer(1, 4, ComputeBufferType.Counter);
-        countBuffer.SetCounterValue(0);
-        countBuffer.SetData(new uint[] {0});
+        specialBlocksBuffer = new ComputeBuffer(64, 16, ComputeBufferType.Raw);
+        countBuffer = new ComputeBuffer(2, 4, ComputeBufferType.Raw);
+        countBuffer.SetData(new uint[] {0, 0});
 
-        //voxelArray = new IndexedArray<Voxel>();
+        voxelArray = new IndexedArray<Voxel>();
         noiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 4);
         Initialized = true;
     }
@@ -266,19 +280,21 @@ public struct NoiseBuffer
     {
         countBuffer?.Dispose();
         noiseBuffer?.Dispose();
+        specialBlocksBuffer?.Dispose();
 
         Initialized = false;
     }
 
 }
 
-public struct MeshBuffer
+public class MeshBuffer
 {
     public ComputeBuffer vertexBuffer;
     public ComputeBuffer normalBuffer;
     public ComputeBuffer colorBuffer;
     public ComputeBuffer indexBuffer;
     public ComputeBuffer countBuffer;
+    public ComputeBuffer modifiedNoiseBuffer;
 
     public bool Initialized;
     public bool Cleared;
@@ -289,7 +305,7 @@ public struct MeshBuffer
         if (Initialized)
             return;
 
-        countBuffer = new ComputeBuffer(2, 4, ComputeBufferType.Counter);
+        countBuffer = new ComputeBuffer(2, 4, ComputeBufferType.Raw);
         countBuffer.SetCounterValue(0);
         countBuffer.SetData(new uint[] { 0, 0 });
 
@@ -300,7 +316,8 @@ public struct MeshBuffer
         vertexBuffer ??= new ComputeBuffer(maxVertices*3, 12);
         colorBuffer ??= new ComputeBuffer(maxVertices*3, 16);
         normalBuffer ??= new ComputeBuffer(maxNormals, 12);
-        indexBuffer ??= new ComputeBuffer(maxTris*3, 12);
+        indexBuffer ??= new ComputeBuffer(maxTris*3, 4);
+        modifiedNoiseBuffer ??= new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 4);
 
         Initialized = true;
     }
@@ -312,6 +329,7 @@ public struct MeshBuffer
         colorBuffer?.Dispose();
         indexBuffer?.Dispose();
         countBuffer?.Dispose();
+        modifiedNoiseBuffer?.Dispose();
 
         Initialized = false;
 

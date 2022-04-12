@@ -2,7 +2,7 @@
 #pragma kernel CSMain
 #include "VoxelValues.cginc"
 
-struct VoxelColor32
+struct VoxelDetails
 {
     float color;
     float metallic;
@@ -19,7 +19,7 @@ struct sharedVert
     bool set;
 };
 
-StructuredBuffer<VoxelColor32> voxelColors;
+StructuredBuffer<VoxelDetails> voxelColors;
 RWStructuredBuffer<Voxel> voxelArray;
 RWStructuredBuffer<float3> vertexBuffer;
 RWStructuredBuffer<float3> normalBuffer;
@@ -37,15 +37,6 @@ bool useTextures;
 float packFloats(float xF, float yF)
 {
     float2 output = float2(xF, yF);
-    output.x = floor(output.x * (100 - 1));
-    output.y = floor(output.y * (100 - 1));
-
-    return (output.x * 100) + output.y;
-}
-
-float packFloats(float2 xy)
-{
-    float2 output = xy;
     output.x = floor(output.x * (100 - 1));
     output.y = floor(output.y * (100 - 1));
 
@@ -130,7 +121,8 @@ void calculateContour(uint3 blockCoord, out float3 position, out float3 normal, 
         position = vWorldPos;
         counter = 1;
     }
-    normal /= counter;
+
+    normal = normalize(normal / counter);
     position /= counter;
 
 }
@@ -148,7 +140,8 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     
     float3 faceVertices[4];
     float3 faceNorms[4];
-    float4 color = float4(useTextures ? (((float)block.ID - 1) / 100) : voxelColors[block.ID - 1].color, packFloats(voxelColors[block.ID - 1].metallic, voxelColors[block.ID - 1].smoothness), 0, 0);
+    float4 color = float4(useTextures && voxelColors[block.ID - 1].color == -1 ? ((float)block.ID - 1) : voxelColors[block.ID - 1].color,
+        packFloats(voxelColors[block.ID - 1].metallic, voxelColors[block.ID - 1].smoothness), 0, 0); 
     uint vertCount = 0;
     uint triCount = 0;
     
@@ -166,8 +159,6 @@ void CSMain(uint3 id : SV_DispatchThreadID)
             continue;
         
         //Draw this face
-        counter.IncrementCounter();
-
         //Collect the appropriate vertices from the default vertices and add the block position
         if (!sharedVertices)
         {

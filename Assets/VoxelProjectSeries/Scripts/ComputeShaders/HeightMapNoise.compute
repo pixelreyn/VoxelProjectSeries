@@ -3,6 +3,7 @@
 #pragma kernel ClearArray
 
 #include "Noise/SimplexNoise.compute"
+#include "Noise/HashNoise.compute"
 
 struct Voxel {
     int ID;
@@ -22,13 +23,9 @@ struct NoiseLayer {
     int subSurfaceVoxelId;
 };
 
-struct HeightAndnoise {
-    uint height;
-    uint noiseIndex;
-};
-
 StructuredBuffer<NoiseLayer> noiseArray;
 RWStructuredBuffer<Voxel> voxelArray;
+RWStructuredBuffer<float4> specialBlocksBuffer;
 RWStructuredBuffer<uint> count;
 
 float3 chunkPosition;
@@ -88,29 +85,21 @@ float fractalNoise(float2 pos, int noisePosition)
 
 
 
-HeightAndnoise
-    sampleHeightAtPoint(
-    float2 pos) {
+bool sampleHeightAtPoint(float2 pos, out uint terrainHeight, out uint noiseIndex) {
     float height = 0;
 
     float strongestWeight = 0;
 
     uint count = 0;
-    uint noiseIndex = 0;
     float heightWeight;
     int i = 0;
-    
+
     float weightH = fractalNoise(pos, i);
-    
+    height = clamp((weightH * 240), 0, 250);
 
-        height = clamp((weightH * 240), 0, 250);
-    
-        
-
-    HeightAndnoise hb;
-    hb.height = round(height);
-    hb.noiseIndex = noiseIndex;
-    return hb;
+    noiseIndex = 0;
+    terrainHeight = round(height);
+    return true;
 }
 
 [numthreads(8, 8, 8)]
@@ -122,9 +111,14 @@ void FillArray(uint3 id : SV_DispatchThreadID)
     float3 pos = id + chunkPosition + seedOffset;
     float2 posXZ = pos.xz;
 
-    HeightAndnoise hb = sampleHeightAtPoint(posXZ);
-    uint terrainHeight = hb.height;
-    NoiseLayer selectednoise = noiseArray[hb.noiseIndex];
+    if (voxelArray[flattenCoord(id)].ID != 0)
+        return;
+
+    uint terrainHeight;
+    uint noiseIndex;
+    sampleHeightAtPoint(posXZ, terrainHeight, noiseIndex);
+    NoiseLayer selectednoise = noiseArray[noiseIndex];
+
     Voxel vox;
     vox.ID = 0;
 
@@ -150,6 +144,42 @@ void FillArray(uint3 id : SV_DispatchThreadID)
 
     if (vox.ID != 0)
         InterlockedAdd(count[0], 1);
+
+    if (id.y == terrainHeight && vox.ID != 0 && id.y < 240)
+    {
+        bool placeFoliage = noise(float3(posXZ * 2, seed)) > 0.999;
+
+        if (placeFoliage)
+        {
+            int typeOf = noise(float3(pos.xz * 25, seed)) * 75;
+            int foliageID;
+            if (typeOf < 30)
+                foliageID = 243;
+            else if (typeOf < 45)
+            {
+                bool canSpawnTree = true;
+                uint tHeight, index;
+                for (int x = -1; x <= 1; x++)
+                    for (int z = -1; z <= 1; z++)
+                        if (sampleHeightAtPoint(posXZ + float2(x, z), tHeight, index) && tHeight != terrainHeight)
+                            canSpawnTree = false;
+
+                if (canSpawnTree)
+                    foliageID = 244;
+                else
+                    foliageID = 0;
+            }
+            else if (typeOf < 75)
+                foliageID = 245;
+
+            int counter = 0;
+
+            if (foliageID != 0) {
+                InterlockedAdd(count[1], 1, counter);
+                specialBlocksBuffer[counter] = float4(id + float3(0, 1, 0), foliageID);
+            }
+        }
+    }
 
     voxelArray[flattenCoord(id)] = vox;
 }

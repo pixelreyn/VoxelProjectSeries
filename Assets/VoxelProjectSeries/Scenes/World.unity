@@ -476,35 +476,37 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   worldMaterial: {fileID: 2100000, guid: d41578d92bc26b04bb2355aed476d2cb, type: 2}
-  WorldColors:
-  - color:
+  voxelDetails:
+  - texture: {fileID: 2800000, guid: 64b479ecc48ec9343aa615792b72a11d, type: 3}
+    color:
       serializedVersion: 2
-      rgba: 4278227736
+      rgba: 5091361
     metallic: 0.1
-    smoothness: 0.2
-  - color:
-      serializedVersion: 2
-      rgba: 4278202742
-    metallic: 0.7
-    smoothness: 0.1
-  - color:
-      serializedVersion: 2
-      rgba: 4287634176
-    metallic: 0.6
-    smoothness: 0.2
-  - color:
-      serializedVersion: 2
-      rgba: 0
-    metallic: 0.6
-    smoothness: 0.2
-  voxelTextures:
-  - texture: {fileID: 2800000, guid: 0dc0649bf1b30484099e1017ce7953bc, type: 3}
     smoothness: 0.5
-    metallic: 0.1
-  - texture: {fileID: 2800000, guid: 08183065da9e3d0468b22fe0e8408fb0, type: 3}
-    smoothness: 0.1
+  - texture: {fileID: 2800000, guid: cb06f60397b2585409fc1667d04de54a, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 24185
     metallic: 0.6
-  tex2DArray: {fileID: 18700000, guid: c11853c174938aa4b8a25676989489b5, type: 2}
+    smoothness: 0.2
+  - texture: {fileID: 2800000, guid: 450e1613108922a4eb058fa2ccd7234c, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 19058
+    metallic: 0.4
+    smoothness: 0.1
+  - texture: {fileID: 0}
+    color:
+      serializedVersion: 2
+      rgba: 55618
+    metallic: 0.1
+    smoothness: 0.7
+  - texture: {fileID: 2800000, guid: 847b36e40bf5dad42a23cce5f1dec277, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 7763574
+    metallic: 0.2
+    smoothness: 0.5
   worldSettings:
     chunkSize: 16
     maxHeight: 256

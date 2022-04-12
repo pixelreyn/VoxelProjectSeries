@@ -11,8 +11,7 @@ using UnityEngine.Profiling;
 public class WorldManager : MonoBehaviour
 {
     public Material worldMaterial;
-    public VoxelColor[] WorldColors;
-    public VoxelTexture[] voxelTextures;
+    public Voxels[] voxelDetails;
     public WorldSettings worldSettings;
 
     public Transform mainCamera;
@@ -20,10 +19,11 @@ public class WorldManager : MonoBehaviour
     private Vector3 previouslyCheckedPosition;
 
     //This will contain all modified voxels, structures, whatnot for all chunks, and will effectively be our saving mechanism
-    public ConcurrentDictionary<Vector3, Dictionary<Vector3, Voxel>> modifiedVoxels = new ConcurrentDictionary<Vector3, Dictionary<Vector3, Voxel>>();
+    public Dictionary<Vector3, Dictionary<Vector3, Voxel>> modifiedVoxels = new Dictionary<Vector3, Dictionary<Vector3, Voxel>>();
     public ConcurrentDictionary<Vector3, Chunk> activeChunks;
     public Queue<Chunk> chunkPool;
-    public Queue<MeshData> meshDataPool;
+    public Queue<MeshData> meshDataPool; 
+    public Queue<Vector3> chunksNeedRegenerated = new Queue<Vector3>();
     private List<MeshData> allMeshData;
     ConcurrentQueue<Vector3> chunksNeedCreation = new ConcurrentQueue<Vector3>();
     ConcurrentQueue<Vector3> deactiveChunks = new ConcurrentQueue<Vector3>();
@@ -57,11 +57,9 @@ public class WorldManager : MonoBehaviour
 
         ComputeManager.Instance.Initialize(maxChunksToProcessPerFrame * 3);
 
-        if(worldMaterial.shader.name.Contains("Tex") && voxelTextures.Length > 0)
-        {
-            Debug.Log("Trying to use Textures!");
-            worldMaterial.SetTexture("_TextureArray", GenerateTextureArray());
-        }
+        StructureManager.IntializeRandom(ComputeManager.Instance.seed);
+
+        worldMaterial.SetTexture("_TextureArray", GenerateTextureArray());
 
         activeChunks = new ConcurrentDictionary<Vector3, Chunk>();
         chunkPool = new Queue<Chunk>();
@@ -110,6 +108,26 @@ public class WorldManager : MonoBehaviour
                 x++;
             }
 
+        }
+
+        for (int x = 0; x < maxChunksToProcessPerFrame; x++)
+        {
+            if (x < maxChunksToProcessPerFrame && chunksNeedRegenerated.Count > 0)
+            {
+                contToMake = chunksNeedRegenerated.Peek();
+                if (activeChunks.ContainsKey(contToMake) && activeChunks[contToMake].generationState == Chunk.GeneratingState.Idle)
+                {
+                    chunksNeedRegenerated.Dequeue();
+                    Chunk chunk = activeChunks[contToMake];
+                    chunk.chunkState = Chunk.ChunkState.WaitingToMesh;
+                    ComputeManager.Instance.GenerateVoxelData(chunk, contToMake);
+                }
+                else
+                {
+                    chunksNeedRegenerated.Dequeue();
+                    chunksNeedRegenerated.Enqueue(contToMake);
+                }
+            }
         }
     }
 
@@ -184,7 +202,6 @@ public class WorldManager : MonoBehaviour
 
         if (enqueue)
         {
-            chunk.gameObject.SetActive(false);
             chunkPool.Enqueue(chunk);
         }
 
@@ -199,7 +216,6 @@ public class WorldManager : MonoBehaviour
             {
                 c.ClearData();
                 chunkPool.Enqueue(c);
-                c.gameObject.SetActive(false);
                 return true;
             }
             else
@@ -246,14 +262,6 @@ public class WorldManager : MonoBehaviour
 
     #endregion
 
-    public static Vector3 positionToChunkCoord(Vector3 pos)
-    {
-        pos /= WorldSettings.chunkSize;
-        pos = math.floor(pos) * WorldSettings.chunkSize;
-        pos.y = 0;
-        return pos;
-    }
-
     private void OnApplicationQuit()
     {
         killThreads = true;
@@ -289,18 +297,23 @@ public class WorldManager : MonoBehaviour
 
     public Texture2DArray GenerateTextureArray()
     {
-
-        if (voxelTextures.Length > 0)
+        bool initializedTexArray = false;
+        Texture2DArray texArrayAlbedo = null;
+        if (voxelDetails.Length > 0)
         {
-            Texture2D tex = voxelTextures[0].texture;
-            Texture2DArray texArrayAlbedo = new Texture2DArray(tex.width, tex.height, voxelTextures.Length, tex.format, tex.mipmapCount > 1);
-            texArrayAlbedo.anisoLevel = tex.anisoLevel;
-            texArrayAlbedo.filterMode = tex.filterMode;
-            texArrayAlbedo.wrapMode = tex.wrapMode;
-
-            for (int i = 0; i < voxelTextures.Length; i++)
+            for (int i = 0; i < voxelDetails.Length; i++)
             {
-                Graphics.CopyTexture(voxelTextures[i].texture, 0, 0, texArrayAlbedo, i, 0);
+                if (!initializedTexArray && voxelDetails[i].texture != null)
+                {
+                    Texture2D tex = voxelDetails[i].texture;
+                    texArrayAlbedo = new Texture2DArray(tex.width, tex.height, voxelDetails.Length, tex.format, tex.mipmapCount > 1);
+                    texArrayAlbedo.anisoLevel = tex.anisoLevel;
+                    texArrayAlbedo.filterMode = tex.filterMode;
+                    texArrayAlbedo.wrapMode = tex.wrapMode;
+                    initializedTexArray = true;
+                }
+                if (voxelDetails[i].texture != null)
+                    Graphics.CopyTexture(voxelDetails[i].texture, 0, 0, texArrayAlbedo, i, 0);
             }
 
             return texArrayAlbedo;
@@ -308,6 +321,130 @@ public class WorldManager : MonoBehaviour
         Debug.Log("No Textures found while trying to generate Tex2DArray");
 
         return null;
+    }
+
+    public static Vector3 positionToChunkCoord(Vector3 pos)
+    {
+        pos /= WorldSettings.chunkSize;
+        pos = math.floor(pos) * WorldSettings.chunkSize;
+        pos.y = 0;
+        return pos;
+    }
+
+    Vector3 convertOverageVectorIntoLocal(Vector3 pos, Vector3 direction)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            if (i == 1)
+                continue;
+
+            if (direction[i] < 0)
+                pos[i] = 16 + pos[i];
+            if (direction[i] > 0)
+                pos[i] = pos[i] - 16;
+        }
+
+        return pos;
+    }
+
+    public void SetVoxelAtCoord(Vector3 chunkPosition, Vector3 index, Voxel value)
+    {
+        bool canPlaceWithinChunk = true;
+        Vector3[] neighborPos = new Vector3[3];
+        int neighbor = 0;
+
+        //Debug.Log(voxelPos + " " + baseChunkPos + " " + pos);
+        if (index.x < 2)
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.left * 16;
+            if (index.x < 0)
+                canPlaceWithinChunk = false;
+        }
+        if (index.z < 2)
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.back * 16;
+            if (index.z < 0)
+                canPlaceWithinChunk = false;
+        }
+        if (index.z < 2 && index.x < 2)
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.back * 16 + Vector3.left * 16;
+            if (index.z < 0 || index.x < 0)
+                canPlaceWithinChunk = false;
+        }
+        if (index.x >= 16)
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.right * 16;
+            if (index.x > 17)
+                canPlaceWithinChunk = false;
+        }
+        if (index.z >= 16)
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.forward * 16;
+            if (index.z > 17)
+                canPlaceWithinChunk = false;
+        }
+        if (index.z >= 16 && index.x >= 16)
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.forward * 16 + Vector3.right * 16;
+            if (index.z > 17 || index.x > 17)
+                canPlaceWithinChunk = false;
+        }
+        if (index.z >= 16 && index.x < 2)
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.forward * 16 + Vector3.left * 16;
+            if (index.z > 17 || index.x < 0)
+                canPlaceWithinChunk = false;
+        }
+        if (index.x >= 16 && index.z < 2)
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.back * 16 + Vector3.right * 16;
+            if (index.x > 17 || index.z < 0)
+                canPlaceWithinChunk = false;
+        }
+
+        if (neighbor > 0)
+        {
+            for (int i = 0; i < neighbor; i++)
+            {
+                if (!modifiedVoxels.ContainsKey(neighborPos[i]))
+                    modifiedVoxels.Add(neighborPos[i], new Dictionary<Vector3, Voxel>());
+                Vector3 x = Vector3.zero;
+                x = convertOverageVectorIntoLocal(index, neighborPos[i] - chunkPosition);
+                if (x.x < 0 || x.z < 0 || x.x > 17 || x.z > 17)// == new Vector3(-32,0,-32))
+                {
+                    continue;
+                }
+                if (!modifiedVoxels[neighborPos[i]].ContainsKey(x))
+                    modifiedVoxels[neighborPos[i]].Add(x, value);
+                else
+                    modifiedVoxels[neighborPos[i]][x] = value;
+
+                //Make sure this chunk is enqueued to remesh
+                if (activeChunks.ContainsKey(neighborPos[i]))
+                {
+                    Chunk c = activeChunks[neighborPos[i]];
+                    if (c.chunkState != Chunk.ChunkState.WaitingToMesh)
+                    {
+                        c.chunkState = Chunk.ChunkState.WaitingToMesh;
+                        chunksNeedRegenerated.Enqueue(c.chunkPosition);
+                    }
+                }
+            }
+
+        }
+        if (canPlaceWithinChunk)
+        {
+
+            if (!modifiedVoxels.ContainsKey(chunkPosition))
+                modifiedVoxels.Add(chunkPosition, new Dictionary<Vector3, Voxel>());
+
+            if (!modifiedVoxels[chunkPosition].ContainsKey(index))
+                modifiedVoxels[chunkPosition].Add(index, value);
+            else
+                modifiedVoxels[chunkPosition][index] = value;
+        }
+
     }
 }
 

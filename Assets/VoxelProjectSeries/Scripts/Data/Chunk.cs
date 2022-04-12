@@ -15,6 +15,11 @@ public class Chunk : MonoBehaviour
     private MeshFilter meshFilter;
     private MeshCollider meshCollider;
     private Mesh mesh;
+
+    public bool processLocalMods = false;
+    public ChunkState chunkState = ChunkState.Idle;
+    public GeneratingState generationState = GeneratingState.Idle;
+
     public void Initialize(Material mat, Vector3 position)
     {
         ConfigureComponents();
@@ -26,10 +31,78 @@ public class Chunk : MonoBehaviour
     {
         meshFilter.sharedMesh = null;
         meshCollider.sharedMesh = null;
+        chunkState = ChunkState.Idle;
+        generationState = GeneratingState.Idle;
+        processLocalMods = false;
 
-        mesh.Clear();
-        Destroy(mesh);
-        mesh = null;
+        if (mesh != null)
+        {
+            mesh.Clear();
+            Destroy(mesh);
+            mesh = null;
+        }
+    }
+
+    public void ProcessNoiseForStructs(NoiseBuffer noiseBuffer)
+    {
+
+        //Get our voxel data from the noise buffer and requeue it
+        noiseBuffer.noiseBuffer.GetData(noiseBuffer.voxelArray.array);
+
+        int[] specialBlockCount = new int[2] { 0, 0 };
+        noiseBuffer.countBuffer.GetData(specialBlockCount);
+
+        Vector4[] seedBlocks = new Vector4[specialBlockCount[1]];
+        noiseBuffer.specialBlocksBuffer.GetData(seedBlocks, 0, 0, specialBlockCount[1]);
+
+        bool needRegen = false;
+        //Ensure that we have a created dictionary for our modified voxels
+        if (!WorldManager.Instance.modifiedVoxels.ContainsKey(chunkPosition))// || (WorldManager.Instance.modifiedVoxelCalculated.ContainsKey(containerPosition) && !WorldManager.Instance.modifiedVoxelCalculated[containerPosition]))
+        {
+            WorldManager.Instance.modifiedVoxels.Add(chunkPosition, new Dictionary<Vector3, Voxel>());
+            needRegen = true;
+        }
+
+
+        //If we haven't gone through and processed the special blocks that are seeded in this chunk coord, or if we're just adding the modified voxels to the dictionary, force it to recalculate
+        if (needRegen || !processLocalMods)
+        {
+            //Iterate over specialBlocks and generate the requested structure or block at the location
+            for (int id = 0; id < specialBlockCount[1]; id++)
+            {
+                Vector3 pos = new Vector3(seedBlocks[id].x, seedBlocks[id].y, seedBlocks[id].z);
+                switch ((int)seedBlocks[id].w)
+                {
+                    case 243:
+                        StructureManager.SpawnRockAt(pos, this, noiseBuffer.voxelArray);
+                        break;
+                    case 244:
+                        StructureManager.SpawnTreeAt(pos, this, noiseBuffer.voxelArray);
+                        break;
+                    case 245:
+                        StructureManager.SpawnBushAt(pos, this, noiseBuffer.voxelArray);
+                        break;
+                }
+            }
+            processLocalMods = true;
+        }
+
+        //Kick off the mesh generation process, and process our local modified voxels
+        foreach (var kvp in WorldManager.Instance.modifiedVoxels[chunkPosition])
+        {
+
+            noiseBuffer.voxelArray[kvp.Key] = kvp.Value;
+        }
+
+        //Set our Voxels to the meshBuffer array, and our Generating state to generating so everything knows this chunk is processing it's mesh, and the chunk state back to idle, so we know it needs requeued for other mods
+        chunkState = ChunkState.Idle;
+        generationState = GeneratingState.Generating;
+
+        MeshBuffer meshBuffer = ComputeManager.Instance.GetMeshBuffer();
+        meshBuffer.modifiedNoiseBuffer.SetData(noiseBuffer.voxelArray.array);
+
+        ComputeManager.Instance.ClearAndRequeueBuffer(noiseBuffer);
+        ComputeManager.Instance.GenerateVoxelMesh(chunkPosition, meshBuffer);
     }
 
     public void UploadMesh(MeshBuffer meshBuffer)
@@ -47,6 +120,7 @@ public class Chunk : MonoBehaviour
         meshData.colors = new Color[faceCount[0]];
         meshData.norms = new Vector3[faceCount[0]];
         meshData.indices = new int[faceCount[1]];
+
         //Get all of the meshData from the buffers to local arrays
         meshBuffer.vertexBuffer.GetData(meshData.verts, 0, 0, faceCount[0]);
         meshBuffer.indexBuffer.GetData(meshData.indices, 0, 0, faceCount[1]);
@@ -55,7 +129,12 @@ public class Chunk : MonoBehaviour
             meshBuffer.normalBuffer.GetData(meshData.norms, 0, 0, faceCount[0]);
 
         //Assign the mesh
-        mesh = new Mesh();
+
+        if (mesh == null)
+            mesh = new Mesh();
+        else
+            mesh.Clear();
+
         mesh.SetVertices(meshData.verts, 0, faceCount[0]);
 
         if(WorldManager.WorldSettings.sharedVertices)
@@ -68,15 +147,14 @@ public class Chunk : MonoBehaviour
             mesh.RecalculateNormals();
 
         mesh.RecalculateBounds();
-        mesh.Optimize();
-        mesh.UploadMeshData(true);
+        mesh.UploadMeshData(false);
 
         meshFilter.sharedMesh = mesh;
         meshCollider.sharedMesh = mesh;
 
         WorldManager.Instance.ClearAndRequeueMeshData(meshData);
-        if (!gameObject.activeInHierarchy)
-            gameObject.SetActive(true);
+        ComputeManager.Instance.ClearAndRequeueBuffer(meshBuffer);
+        generationState = GeneratingState.Idle;
     }
 
     private void ConfigureComponents()
@@ -88,38 +166,26 @@ public class Chunk : MonoBehaviour
 
     public void Dispose()
     {
-        mesh.Clear();
-        Destroy(mesh);
-        mesh = null;
+        if (mesh != null)
+        {
+            mesh.Clear();
+            Destroy(mesh);
+            mesh = null;
+        }
     }
 
-    public Voxel this[Vector3 index]
+    public enum ChunkState
     {
-        get
-        {
-            if (WorldManager.Instance.modifiedVoxels.ContainsKey(chunkPosition))
-            {
-                if (WorldManager.Instance.modifiedVoxels[chunkPosition].ContainsKey(index))
-                {
-                    return WorldManager.Instance.modifiedVoxels[chunkPosition][index];
-                }
-                else return new Voxel() { ID = 0 };
-            }
-            else return new Voxel() { ID = 0 };
-        }
-
-        set
-        {
-            if (!WorldManager.Instance.modifiedVoxels.ContainsKey(chunkPosition))
-                WorldManager.Instance.modifiedVoxels.TryAdd(chunkPosition, new Dictionary<Vector3, Voxel>());
-            if (!WorldManager.Instance.modifiedVoxels[chunkPosition].ContainsKey(index))
-                WorldManager.Instance.modifiedVoxels[chunkPosition].Add(index, value);
-            else
-                WorldManager.Instance.modifiedVoxels[chunkPosition][index] = value;
-        }
+        Idle,
+        WaitingToMesh,
     }
 
-    
+    public enum GeneratingState
+    {
+        Idle,
+        Generating
+    }
+
 }
 
 [System.Serializable]
