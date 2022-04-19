@@ -10,7 +10,7 @@ using UnityEngine.Profiling;
 
 public class WorldManager : MonoBehaviour
 {
-    public Material worldMaterial;
+    public Material[] worldMaterials;
     public Voxels[] voxelDetails;
     public WorldSettings worldSettings;
 
@@ -20,6 +20,7 @@ public class WorldManager : MonoBehaviour
 
     //This will contain all modified voxels, structures, whatnot for all chunks, and will effectively be our saving mechanism
     public Dictionary<Vector3, Dictionary<Vector3, Voxel>> modifiedVoxels = new Dictionary<Vector3, Dictionary<Vector3, Voxel>>();
+    public ConcurrentDictionary<Vector3, ConcurrentDictionary<Vector3, Voxel>> activeVoxels = new ConcurrentDictionary<Vector3, ConcurrentDictionary<Vector3, Voxel>>();
     public ConcurrentDictionary<Vector3, Chunk> activeChunks;
     public Queue<Chunk> chunkPool;
     public Queue<MeshData> meshDataPool; 
@@ -30,6 +31,7 @@ public class WorldManager : MonoBehaviour
 
     public int maxChunksToProcessPerFrame = 6;
     int mainThreadID;
+    Thread checkActiveVoxels;
     Thread checkActiveChunks;
     bool killThreads = false;
     bool performedFirstPass = false;
@@ -59,7 +61,7 @@ public class WorldManager : MonoBehaviour
 
         StructureManager.IntializeRandom(ComputeManager.Instance.seed);
 
-        worldMaterial.SetTexture("_TextureArray", GenerateTextureArray());
+        worldMaterials[0].SetTexture("_TextureArray", GenerateTextureArray());
 
         activeChunks = new ConcurrentDictionary<Vector3, Chunk>();
         chunkPool = new Queue<Chunk>();
@@ -80,6 +82,10 @@ public class WorldManager : MonoBehaviour
         checkActiveChunks = new Thread(CheckActiveChunksLoop);
         checkActiveChunks.Priority = System.Threading.ThreadPriority.BelowNormal;
         checkActiveChunks.Start(); 
+        
+        checkActiveVoxels = new Thread(CheckActiveVoxelsLoop);
+        checkActiveVoxels.Priority = System.Threading.ThreadPriority.BelowNormal;
+        checkActiveVoxels.Start();
 
     }
 
@@ -103,6 +109,7 @@ public class WorldManager : MonoBehaviour
             {
                 Chunk chunk = GetChunk(contToMake);
                 chunk.chunkPosition = contToMake;
+                chunk.chunkState = Chunk.ChunkState.WaitingToMesh;
                 activeChunks.TryAdd(contToMake, chunk);
                 ComputeManager.Instance.GenerateVoxelData(chunk, contToMake);
                 x++;
@@ -175,6 +182,46 @@ public class WorldManager : MonoBehaviour
         Profiler.EndThreadProfiling();
     }
 
+    void CheckActiveVoxelsLoop()
+    {
+        while (true && !killThreads)
+        {
+            foreach (var kvp in activeVoxels)
+            {
+                if (activeChunks.ContainsKey(kvp.Key))
+                {
+                    Chunk c = activeChunks[kvp.Key];
+                    if (!c.needProcessBlockTicks)
+                    {
+                        List<Vector3> toRemove = new List<Vector3>();
+                        foreach (var activeVoxelKVP in kvp.Value)
+                        {
+                            if (activeVoxelKVP.Value.ActiveValue < 0.15f)
+                            {
+                                toRemove.Add(activeVoxelKVP.Key);
+                                continue;
+                            }
+
+                            c.blockPosToUpdate.Add(activeVoxelKVP.Key);
+                        }
+                        if (c.blockPosToUpdate.Count > 0)
+                        {
+                            c.needProcessBlockTicks = true;
+                            if (c.chunkState != Chunk.ChunkState.WaitingToMesh)
+                            {
+                                c.chunkState = Chunk.ChunkState.WaitingToMesh;
+                                chunksNeedRegenerated.Enqueue(c.chunkPosition);
+                            }
+                        }
+                        foreach (Vector3 v in toRemove)
+                            kvp.Value.TryRemove(v, out var voxel);
+                    }
+                }
+            }
+            Thread.Sleep(300);
+        }
+    }
+
     #region Chunk Pooling
     public Chunk GetChunk(Vector3 pos)
     {
@@ -198,7 +245,7 @@ public class WorldManager : MonoBehaviour
         Chunk chunk = new GameObject().AddComponent<Chunk>();
         chunk.transform.parent = transform;
         chunk.chunkPosition = position;
-        chunk.Initialize(worldMaterial, position);
+        chunk.Initialize(worldMaterials, position);
 
         if (enqueue)
         {
@@ -244,7 +291,6 @@ public class WorldManager : MonoBehaviour
     {
 
         MeshData meshData = new MeshData();
-        meshData.Initialize();
 
         if (enqueue)
         {
@@ -266,6 +312,7 @@ public class WorldManager : MonoBehaviour
     {
         killThreads = true;
         checkActiveChunks?.Abort();
+        checkActiveVoxels?.Abort();
 
         foreach(var c in activeChunks.Keys)
         {
@@ -403,6 +450,7 @@ public class WorldManager : MonoBehaviour
                 canPlaceWithinChunk = false;
         }
 
+        bool isActive = value.ID == 240;
         if (neighbor > 0)
         {
             for (int i = 0; i < neighbor; i++)
@@ -415,10 +463,23 @@ public class WorldManager : MonoBehaviour
                 {
                     continue;
                 }
-                if (!modifiedVoxels[neighborPos[i]].ContainsKey(x))
-                    modifiedVoxels[neighborPos[i]].Add(x, value);
+
+                if (isActive)
+                {
+                    if (!activeVoxels.ContainsKey(neighborPos[i]))
+                        activeVoxels.TryAdd(neighborPos[i], new ConcurrentDictionary<Vector3, Voxel>());
+                    if (!activeVoxels[neighborPos[i]].ContainsKey(x))
+                        activeVoxels[neighborPos[i]].TryAdd(x, value);
+                    else
+                        activeVoxels[neighborPos[i]][x] = value;
+                }
                 else
-                    modifiedVoxels[neighborPos[i]][x] = value;
+                {
+                    if (!modifiedVoxels[neighborPos[i]].ContainsKey(x))
+                        modifiedVoxels[neighborPos[i]].Add(x, value);
+                    else
+                        modifiedVoxels[neighborPos[i]][x] = value;
+                }
 
                 //Make sure this chunk is enqueued to remesh
                 if (activeChunks.ContainsKey(neighborPos[i]))
@@ -439,10 +500,24 @@ public class WorldManager : MonoBehaviour
             if (!modifiedVoxels.ContainsKey(chunkPosition))
                 modifiedVoxels.Add(chunkPosition, new Dictionary<Vector3, Voxel>());
 
-            if (!modifiedVoxels[chunkPosition].ContainsKey(index))
-                modifiedVoxels[chunkPosition].Add(index, value);
+            if (isActive)
+            {
+                if (!activeVoxels.ContainsKey(chunkPosition))
+                    activeVoxels.TryAdd(chunkPosition, new ConcurrentDictionary<Vector3, Voxel>());
+                if (!activeVoxels[chunkPosition].ContainsKey(index))
+                    activeVoxels[chunkPosition].TryAdd(index, value);
+                else
+                    activeVoxels[chunkPosition][index] = value;
+            }
             else
-                modifiedVoxels[chunkPosition][index] = value;
+            {
+                if (!modifiedVoxels.ContainsKey(chunkPosition))
+                    modifiedVoxels.Add(chunkPosition, new Dictionary<Vector3, Voxel>());
+                if (!modifiedVoxels[chunkPosition].ContainsKey(index))
+                    modifiedVoxels[chunkPosition].Add(index, value);
+                else
+                    modifiedVoxels[chunkPosition][index] = value;
+            }
         }
 
     }

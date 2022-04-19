@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 public struct Voxel
 {
-    public int ID;
+    public int ID; 
+    public float ActiveValue;
+    public int CantUpdateFurther;
 
     public bool isSolid
     {
