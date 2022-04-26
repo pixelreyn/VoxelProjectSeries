@@ -20,10 +20,13 @@ public class Chunk : MonoBehaviour
     public ChunkState chunkState = ChunkState.Idle;
     public GeneratingState generationState = GeneratingState.Idle;
 
-    public void Initialize(Material mat, Vector3 position)
+    public bool needProcessBlockTicks = false;
+    public List<Vector3> blockPosToUpdate = new List<Vector3>();
+
+    public void Initialize(Material[] mats, Vector3 position)
     {
         ConfigureComponents();
-        meshRenderer.sharedMaterial = mat;
+        meshRenderer.sharedMaterials = mats;
         chunkPosition = position;
     }
 
@@ -94,6 +97,24 @@ public class Chunk : MonoBehaviour
             noiseBuffer.voxelArray[kvp.Key] = kvp.Value;
         }
 
+        if (needProcessBlockTicks)
+        {
+            foreach (Vector3 v in blockPosToUpdate)
+            {
+                ActiveVoxelManager.UpdateVoxel(chunkPosition, v, WorldManager.Instance.activeVoxels[chunkPosition][v], ref noiseBuffer);
+            }
+            blockPosToUpdate.Clear();
+            needProcessBlockTicks = false;
+        }
+
+        if (WorldManager.Instance.activeVoxels.ContainsKey(chunkPosition))
+        {
+            foreach (var kvp in WorldManager.Instance.activeVoxels[chunkPosition])
+            {
+                noiseBuffer.voxelArray[kvp.Key] = kvp.Value;
+            }
+        }
+
         //Set our Voxels to the meshBuffer array, and our Generating state to generating so everything knows this chunk is processing it's mesh, and the chunk state back to idle, so we know it needs requeued for other mods
         chunkState = ChunkState.Idle;
         generationState = GeneratingState.Generating;
@@ -112,7 +133,7 @@ public class Chunk : MonoBehaviour
             ConfigureComponents();
 
         //Get the count of vertices/tris from the shader
-        int[] faceCount = new int[2] { 0, 0 };
+        int[] faceCount = new int[3] { 0, 0, 0 };
         meshBuffer.countBuffer.GetData(faceCount);
         MeshData meshData = WorldManager.Instance.GetMeshData();
 
@@ -120,10 +141,12 @@ public class Chunk : MonoBehaviour
         meshData.colors = new Color[faceCount[0]];
         meshData.norms = new Vector3[faceCount[0]];
         meshData.indices = new int[faceCount[1]];
+        meshData.transparentIndices = new int[faceCount[2]];
 
         //Get all of the meshData from the buffers to local arrays
-        meshBuffer.vertexBuffer.GetData(meshData.verts, 0, 0, faceCount[0]);
+        meshBuffer.vertexBuffer.GetData(meshData.verts, 0, 0, faceCount[0]); 
         meshBuffer.indexBuffer.GetData(meshData.indices, 0, 0, faceCount[1]);
+        meshBuffer.transparentIndexBuffer.GetData(meshData.transparentIndices, 0, 0, faceCount[2]);
         meshBuffer.colorBuffer.GetData(meshData.colors, 0, 0, faceCount[0]);
         if (WorldManager.WorldSettings.sharedVertices)
             meshBuffer.normalBuffer.GetData(meshData.norms, 0, 0, faceCount[0]);
@@ -135,12 +158,16 @@ public class Chunk : MonoBehaviour
         else
             mesh.Clear();
 
+        mesh.subMeshCount = 2;
+
         mesh.SetVertices(meshData.verts, 0, faceCount[0]);
 
         if(WorldManager.WorldSettings.sharedVertices)
             mesh.SetNormals(meshData.norms, 0, faceCount[0]);
 
-        mesh.SetIndices(meshData.indices, 0, faceCount[1], MeshTopology.Triangles, 0);
+        mesh.SetTriangles(meshData.indices, 0, faceCount[1], 0);
+        mesh.SetTriangles(meshData.transparentIndices, 0, faceCount[2], 1);
+
         mesh.SetColors(meshData.colors, 0, faceCount[0]);
 
         if (!WorldManager.WorldSettings.sharedVertices)
@@ -192,20 +219,15 @@ public class Chunk : MonoBehaviour
 public class MeshData
 {
     public int[] indices;
+    public int[] transparentIndices;
     public Vector3[] verts;
     public Vector3[] norms;
     public Color[] colors;
     public Mesh mesh;
 
-    public int arraySize;
-
-    public void Initialize()
-    {
-        int maxTris = WorldManager.WorldSettings.chunkSize * WorldManager.WorldSettings.maxHeight * WorldManager.WorldSettings.chunkSize / 4;
-        arraySize = maxTris * 3;
-    }
     public void ClearArrays()
     {
+        transparentIndices = null;
         indices = null;
         verts = null;
         norms = null;

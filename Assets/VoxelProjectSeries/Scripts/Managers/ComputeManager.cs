@@ -96,8 +96,7 @@ public class ComputeManager : MonoBehaviour
 
     public void GenerateVoxelMesh(Vector3 pos, MeshBuffer meshBuffer)
     {
-        meshBuffer.countBuffer.SetCounterValue(0);
-        meshBuffer.countBuffer.SetData(new uint[] { 0, 0 });
+        meshBuffer.countBuffer.SetData(new uint[] { 0, 0, 0});
         voxelShader.SetVector("chunkPosition", pos);
 
         voxelShader.SetBuffer(0, "voxelArray", meshBuffer.modifiedNoiseBuffer);
@@ -106,6 +105,7 @@ public class ComputeManager : MonoBehaviour
         voxelShader.SetBuffer(0, "normalBuffer", meshBuffer.normalBuffer);
         voxelShader.SetBuffer(0, "colorBuffer", meshBuffer.colorBuffer);
         voxelShader.SetBuffer(0, "indexBuffer", meshBuffer.indexBuffer);
+        voxelShader.SetBuffer(0, "transparentIndexBuffer", meshBuffer.transparentIndexBuffer);
         voxelShader.Dispatch(0, xThreads, yThreads, xThreads);
 
         AsyncGPUReadback.Request(meshBuffer.countBuffer, (callback) =>
@@ -272,7 +272,7 @@ public class NoiseBuffer
         countBuffer.SetData(new uint[] {0, 0});
 
         voxelArray = new IndexedArray<Voxel>();
-        noiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 4);
+        noiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 12);
         Initialized = true;
     }
 
@@ -295,6 +295,7 @@ public class MeshBuffer
     public ComputeBuffer indexBuffer;
     public ComputeBuffer countBuffer;
     public ComputeBuffer modifiedNoiseBuffer;
+    public ComputeBuffer transparentIndexBuffer;
 
     public bool Initialized;
     public bool Cleared;
@@ -305,19 +306,19 @@ public class MeshBuffer
         if (Initialized)
             return;
 
-        countBuffer = new ComputeBuffer(2, 4, ComputeBufferType.Raw);
-        countBuffer.SetCounterValue(0);
-        countBuffer.SetData(new uint[] { 0, 0 });
+        countBuffer = new ComputeBuffer(3, 4, ComputeBufferType.Raw);
+        countBuffer.SetData(new uint[] { 0, 0, 0 });
 
-        int maxTris = WorldManager.WorldSettings.chunkSize * WorldManager.WorldSettings.maxHeight * WorldManager.WorldSettings.chunkSize / 6;
+        int maxTris = WorldManager.WorldSettings.chunkSize * WorldManager.WorldSettings.maxHeight * WorldManager.WorldSettings.chunkSize / 4;
         //width*height*width*faces*tris
         int maxVertices = WorldManager.WorldSettings.sharedVertices ? maxTris / 3 : maxTris;
         int maxNormals = WorldManager.WorldSettings.sharedVertices ? maxVertices * 3 : 1;
         vertexBuffer ??= new ComputeBuffer(maxVertices*3, 12);
         colorBuffer ??= new ComputeBuffer(maxVertices*3, 16);
         normalBuffer ??= new ComputeBuffer(maxNormals, 12);
-        indexBuffer ??= new ComputeBuffer(maxTris*3, 4);
-        modifiedNoiseBuffer ??= new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 4);
+        indexBuffer ??= new ComputeBuffer(maxTris*3, 4); 
+        modifiedNoiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 12);
+        transparentIndexBuffer ??= new ComputeBuffer(maxTris*3, 4);
 
         Initialized = true;
     }
@@ -328,6 +329,7 @@ public class MeshBuffer
         normalBuffer?.Dispose();
         colorBuffer?.Dispose();
         indexBuffer?.Dispose();
+        transparentIndexBuffer?.Dispose();
         countBuffer?.Dispose();
         modifiedNoiseBuffer?.Dispose();
 
