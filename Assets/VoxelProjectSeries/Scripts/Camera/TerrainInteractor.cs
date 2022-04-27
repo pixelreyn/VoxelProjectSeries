@@ -9,7 +9,7 @@ public class TerrainInteractor : MonoBehaviour
     public ToolMode toolMode;
     public ToolType toolType;
     public int radiusToAffect = 2;
-    public int voxelIDToPlace = 4;
+    public byte voxelIDToPlace = 4;
 
 
     void Update()
@@ -38,7 +38,7 @@ public class TerrainInteractor : MonoBehaviour
                 if (blockPos.y < 0)
                     return;
 
-                float v = voxelIDToPlace == 240 ? 1 : 0;
+                byte v = (byte)(voxelIDToPlace == 240 ? 100 : 0);
                 if (toolType == ToolType.SingleBlock)
                     WorldManager.Instance.SetVoxelAtCoord(chunkPos, math.round(blockPos), new Voxel() { ID = voxelIDToPlace, ActiveValue = v });
                 else
@@ -50,7 +50,8 @@ public class TerrainInteractor : MonoBehaviour
                                 Vector3 modPos = math.round(blockPos + new Vector3(x, y, z));
                                 if ((modPos.y < 0 && voxelIDToPlace != 0) || (modPos.y < 1 && voxelIDToPlace == 0))
                                     continue;
-                                WorldManager.Instance.SetVoxelAtCoord(chunkPos, blockPos + new Vector3(x, y, z), new Voxel() { ID = voxelIDToPlace, ActiveValue = v });
+
+                                WorldManager.Instance.SetVoxelAtCoord(chunkPos, modPos, new Voxel() { ID = voxelIDToPlace, ActiveValue = v });
 
                             }
                 }

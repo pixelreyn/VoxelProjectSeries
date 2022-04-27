@@ -19,16 +19,16 @@ public static class ActiveVoxelManager
     {
         Vector3 down = voxelPos + new Vector3(0, -1, 0);
 
-        if (vox.ActiveValue >= 0.15 && noiseBuffer.voxelArray[down].ID == 0 && !WorldManager.Instance.activeVoxels[chunkPos].ContainsKey(down) && down.y > 0)
+        if (vox.ActiveValue >= 15 && noiseBuffer.voxelArray[down].ID == 0 && !WorldManager.Instance.activeVoxels[chunkPos].ContainsKey(down) && down.y > 0)
         {
             //Air below, continue to traverse down
-            vox.CantUpdateFurther = 1;
+            vox.ActiveValue = 0;
             WorldManager.Instance.SetVoxelAtCoord(chunkPos, voxelPos, vox);
-            WorldManager.Instance.SetVoxelAtCoord(chunkPos, down, new Voxel() { ID = vox.ID, ActiveValue = 1, CantUpdateFurther = 0 });
+            WorldManager.Instance.SetVoxelAtCoord(chunkPos, down, new Voxel() { ID = vox.ID, ActiveValue = 100});
             return;
         }
         //If hitting solid and not water, first hit onto the floor as well, helps prevent rerunning updates
-        if (vox.ActiveValue >= 0.15 && noiseBuffer.voxelArray[down].ID != 0 && noiseBuffer.voxelArray[down].ID != 240)
+        if (vox.ActiveValue >= 15 && noiseBuffer.voxelArray[down].ID != 0 && noiseBuffer.voxelArray[down].ID != 240)
         {
             for (int i = -1; i <= 1; i++)
             {
@@ -52,8 +52,7 @@ public static class ActiveVoxelManager
                     if (v.ID == 0)
                     {
                         v.ID = vox.ID;
-                        v.ActiveValue = vox.ActiveValue - 0.15f;
-                        v.CantUpdateFurther = 0;
+                        v.ActiveValue = (byte)(vox.ActiveValue - 15);
                         WorldManager.Instance.SetVoxelAtCoord(chunkPos, modPos, v);
 
                     }
@@ -63,7 +62,6 @@ public static class ActiveVoxelManager
             }
         }
 
-        vox.CantUpdateFurther = 1;
         WorldManager.Instance.SetVoxelAtCoord(chunkPos, voxelPos, vox);
     }
 }

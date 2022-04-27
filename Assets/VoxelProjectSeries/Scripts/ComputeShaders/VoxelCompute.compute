@@ -1,19 +1,7 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 #include "VoxelValues.cginc"
-
-struct VoxelDetails
-{
-    float color;
-    float metallic;
-    float smoothness;
-};
-
-struct Voxel {
-    int ID;
-    float ActiveValue;
-    int CantUpdateFurther;
-};
+#include "Voxel.compute"
 
 struct sharedVert
 {
@@ -63,12 +51,12 @@ uint flattenCoord(uint3 idx)
 
 bool VoxelIsSolid(uint3 pos)
 {
-    return voxelArray[flattenCoord(pos)].ID != 0;
+    return GetVoxelData(0, voxelArray[flattenCoord(pos)].VoxelData) != 0;
 }
 
 bool VoxelIsTransparent(uint3 pos)
 {
-    return voxelArray[flattenCoord(pos)].ID == 240;
+    return GetVoxelData(0, voxelArray[flattenCoord(pos)].VoxelData) == 240;
 }
 
 static uint3 getCellCenterForIDX(int idx, int axis, int corner)
@@ -98,6 +86,7 @@ void calculateContour(uint3 blockCoord, out float3 position, out float3 normal, 
     uint3 vWorldPos = blockCoord + vertexPos; //take local block coord, add the cubed position
     int counter = 0;
     currentCell = voxelArray[flattenCoord(blockCoord)];
+    int currentCellId = GetVoxelData(0, currentCell.VoxelData);
 
     for (int ax = 0; ax < 3; ax++)
     {
@@ -110,17 +99,17 @@ void calculateContour(uint3 blockCoord, out float3 position, out float3 normal, 
             adjacentRootCell = voxelArray[flattenCoord(adjacentCellRoot)];
             adjacentCell = voxelArray[flattenCoord(adjacentCellPos)];
             
-            adjacentRootCellId = adjacentRootCell.ID;
-            adjacentCellId = adjacentCell.ID;
+            adjacentRootCellId = GetVoxelData(0, adjacentRootCell.VoxelData);
+            adjacentCellId = GetVoxelData(0, adjacentCell.VoxelData);
 
-            if (adjacentRootCell.ID == 240 && currentCell.ID != 240)
+            if (adjacentRootCellId == 240 && currentCellId != 240)
                 adjacentRootCellId = 0;
-            if (adjacentCell.ID == 240 && currentCell.ID != 240)
+            if (adjacentCellId == 240 && currentCellId != 240)
                 adjacentCellId = 0;
 
-            if (currentCell.ID == 240 && adjacentRootCell.ID != 240)
+            if (currentCellId == 240 && adjacentRootCellId != 240)
                 adjacentRootCellId = 0;
-            if (currentCell.ID == 240 && adjacentCell.ID != 240)
+            if (currentCellId == 240 && adjacentCellId != 240)
                 adjacentCellId = 0;
 
             adjacentRootCellDensity = adjacentRootCellId != 0 ? 1 : 0;
@@ -156,15 +145,16 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         return;
     
     Voxel block = voxelArray[flattenCoord(id)];
+    int blockID = GetVoxelData(0, block.VoxelData);
 
-    if (block.ID == 0)
+    if (blockID == 0)
         return;
     
     float3 faceVertices[4];
     float3 faceNorms[4];
-    float4 color = float4(block.ID == 240 ? 240 :
-        (useTextures && voxelColors[block.ID - 1].color == -1 ? ((float) block.ID - 1) : voxelColors[block.ID - 1].color),
-        packFloats(voxelColors[block.ID - 1].metallic, voxelColors[block.ID - 1].smoothness), 0, 0);
+    float4 color = float4(blockID == 240 ? 240 :
+        (useTextures && voxelColors[blockID - 1].color == -1 ? ((float) blockID - 1) : voxelColors[blockID - 1].color),
+        packFloats(voxelColors[blockID - 1].metallic, voxelColors[blockID - 1].smoothness), 0, 0);
     uint vertCount = 0;
     uint triCount = 0;
     
@@ -181,7 +171,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         if (VoxelIsSolid(id + voxelFaceChecks[i]) && !VoxelIsTransparent(id + voxelFaceChecks[i]))
             continue;
 
-        if (block.ID == 240 && VoxelIsTransparent(id + voxelFaceChecks[i]))
+        if (blockID == 240 && VoxelIsTransparent(id + voxelFaceChecks[i]))
             continue;
         
         //Draw this face
@@ -189,7 +179,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         if (!sharedVertices)
         {
             InterlockedAdd(counter[0], 6, vertCount);
-            if (block.ID != 240)
+            if (blockID != 240)
                 InterlockedAdd(counter[1], 6, triCount);
             else
                 InterlockedAdd(counter[2], 6, triCount);
@@ -206,7 +196,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
                 color.b = voxelUVs[voxelTris[i][k]].x;
                 color.a = voxelUVs[voxelTris[i][k]].y;
                 colorBuffer[vertCount + k] = color;
-                if (block.ID != 240)
+                if (blockID != 240)
                     indexBuffer[triCount + k] = vertCount + k;
                 else
                     transparentIndexBuffer[triCount + k] = vertCount + k;
@@ -214,7 +204,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         }
         else
         {
-            if (block.ID != 240)
+            if (blockID != 240)
                 InterlockedAdd(counter[1], 6, triCount);
             else
                 InterlockedAdd(counter[2], 6, triCount);
@@ -239,7 +229,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
                     colorBuffer[vertCount] = color;
                 }
                 
-                if (block.ID != 240)
+                if (blockID != 240)
                     indexBuffer[triCount + k] = sharedVerts[idx].index;
                 else
                     transparentIndexBuffer[triCount + k] = sharedVerts[idx].index;

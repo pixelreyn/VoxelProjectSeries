@@ -274,7 +274,7 @@ MonoBehaviour:
   ReplaceBlockInPlace: 0
   toolMode: 1
   toolType: 1
-  radiusToAffect: 4
+  radiusToAffect: 3
   voxelIDToPlace: 0
 --- !u!1 &1147823335
 GameObject:
@@ -500,7 +500,7 @@ MonoBehaviour:
   - texture: {fileID: 2800000, guid: 64b479ecc48ec9343aa615792b72a11d, type: 3}
     color:
       serializedVersion: 2
-      rgba: 5091361
+      rgba: 45584
     metallic: 0.1
     smoothness: 0.5
   - texture: {fileID: 2800000, guid: cb06f60397b2585409fc1667d04de54a, type: 3}
@@ -515,7 +515,7 @@ MonoBehaviour:
       rgba: 19058
     metallic: 0.4
     smoothness: 0.1
-  - texture: {fileID: 0}
+  - texture: {fileID: 2800000, guid: 0dc0649bf1b30484099e1017ce7953bc, type: 3}
     color:
       serializedVersion: 2
       rgba: 55618
@@ -532,9 +532,9 @@ MonoBehaviour:
     maxHeight: 256
     renderDistance: 64
     sharedVertices: 0
-    useTextures: 0
+    useTextures: 1
   mainCamera: {fileID: 414495109}
-  maxChunksToProcessPerFrame: 8
+  maxChunksToProcessPerFrame: 6
 --- !u!114 &1755072227
 MonoBehaviour:
   m_ObjectHideFlags: 0
