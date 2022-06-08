@@ -216,13 +216,14 @@ public class ComputeManager : MonoBehaviour
     static float ColorfTo32(Color32 c)
     {
         if (c.r == 0)
-            c.r = 1;
+            c.r = 5;
         if (c.g == 0)
-            c.g = 1;
+            c.g = 5;
         if (c.b == 0)
-            c.b = 1;
+            c.b = 5;
         if (c.a == 0)
-            c.a = 1;
+            c.a = 5;
+
         return (c.r << 24) | (c.g << 16) | (c.b << 8) | (c.a);
     }
 
@@ -272,7 +273,7 @@ public class NoiseBuffer
         countBuffer.SetData(new uint[] {0, 0});
 
         voxelArray = new IndexedArray<Voxel>();
-        noiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 12);
+        noiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 4);
         Initialized = true;
     }
 
@@ -317,7 +318,7 @@ public class MeshBuffer
         colorBuffer ??= new ComputeBuffer(maxVertices*3, 16);
         normalBuffer ??= new ComputeBuffer(maxNormals, 12);
         indexBuffer ??= new ComputeBuffer(maxTris*3, 4); 
-        modifiedNoiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 12);
+        modifiedNoiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 4);
         transparentIndexBuffer ??= new ComputeBuffer(maxTris*3, 4);
 
         Initialized = true;

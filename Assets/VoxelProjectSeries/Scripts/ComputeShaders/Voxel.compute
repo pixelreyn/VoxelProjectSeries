@@ -1,0 +1,22 @@
+struct Voxel
+{
+    int VoxelData;
+};
+
+struct VoxelDetails
+{
+    float color;
+    float metallic;
+    float smoothness;
+};
+
+uint GetVoxelData(uint component, int voxelData)
+{
+    uint shift = (8 * component);
+    return ((voxelData & (0xff << shift)) >> shift);
+}
+
+void UpdateVoxelData(int component, int value, inout uint voxelData)
+{
+    voxelData |= value << (8 * component);
+}

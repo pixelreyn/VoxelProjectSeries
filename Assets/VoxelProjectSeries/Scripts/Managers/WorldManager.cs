@@ -196,7 +196,7 @@ public class WorldManager : MonoBehaviour
                         List<Vector3> toRemove = new List<Vector3>();
                         foreach (var activeVoxelKVP in kvp.Value)
                         {
-                            if (activeVoxelKVP.Value.ActiveValue < 0.15f)
+                            if (activeVoxelKVP.Value.ActiveValue < 15)
                             {
                                 toRemove.Add(activeVoxelKVP.Key);
                                 continue;
@@ -450,7 +450,7 @@ public class WorldManager : MonoBehaviour
                 canPlaceWithinChunk = false;
         }
 
-        bool isActive = value.ID == 240;
+        bool isActive = value.ID == 240 && value.ActiveValue > 15;
         if (neighbor > 0)
         {
             for (int i = 0; i < neighbor; i++)
@@ -517,6 +517,16 @@ public class WorldManager : MonoBehaviour
                     modifiedVoxels[chunkPosition].Add(index, value);
                 else
                     modifiedVoxels[chunkPosition][index] = value;
+            }
+
+            if (activeChunks.ContainsKey(chunkPosition))
+            {
+                Chunk c = activeChunks[chunkPosition];
+                if (c.chunkState != Chunk.ChunkState.WaitingToMesh)
+                {
+                    c.chunkState = Chunk.ChunkState.WaitingToMesh;
+                    chunksNeedRegenerated.Enqueue(c.chunkPosition);
+                }
             }
         }
 

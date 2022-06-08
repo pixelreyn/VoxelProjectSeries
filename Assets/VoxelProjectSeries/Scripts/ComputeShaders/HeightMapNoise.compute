@@ -4,12 +4,7 @@
 
 #include "Noise/SimplexNoise.compute"
 #include "Noise/HashNoise.compute"
-
-struct Voxel {
-    int ID;
-    float ActiveValue;
-    int CantUpdateFurther;
-};
+#include "Voxel.compute"
 
 struct NoiseLayer {
     float gain;
@@ -112,8 +107,8 @@ void FillArray(uint3 id : SV_DispatchThreadID)
     
     float3 pos = id + chunkPosition + seedOffset;
     float2 posXZ = pos.xz;
-
-    if (voxelArray[flattenCoord(id)].ID != 0)
+    
+    if (GetVoxelData(0, voxelArray[flattenCoord(id)].VoxelData) != 0)
         return;
 
     uint terrainHeight;
@@ -122,41 +117,41 @@ void FillArray(uint3 id : SV_DispatchThreadID)
     NoiseLayer selectednoise = noiseArray[noiseIndex];
 
     Voxel vox;
-    vox.ID = 0;
-    vox.ActiveValue = 0;
-    vox.CantUpdateFurther = 1;
+    vox.VoxelData = 0;
+    int voxelId = 0;
 
     if (id.y > terrainHeight)
     {
-        vox.ID = 0;
+        voxelId = 0;
         
-        if (vox.ID == 0 && id.y <= 2)
+        if (voxelId == 0 && id.y <= 2)
         {
-            vox.ID = 240;
+            voxelId = 240;
             InterlockedAdd(count[0], 1);
         }
         
+        UpdateVoxelData(0, voxelId, vox.VoxelData);
         voxelArray[flattenCoord(id)] = vox;
         return;
     }
 
     bool isSurfaceBlock = id.y >= terrainHeight - 3;
 
-    vox.ID = isSurfaceBlock ? selectednoise.surfaceVoxelId : selectednoise.subSurfaceVoxelId;
+    voxelId = isSurfaceBlock ? selectednoise.surfaceVoxelId : selectednoise.subSurfaceVoxelId;
     
     if (generateCaves && evaluateNoise(pos, terrainHeight) > selectednoise.caveThreshold)
     {
-        vox.ID = 0;
+        voxelId = 0;
     }
 
     if (id.y <= 1 && forceFloor)
-        vox.ID = selectednoise.surfaceVoxelId;
+        voxelId = selectednoise.surfaceVoxelId;
 
 
-    if (vox.ID != 0)
+    if (voxelId != 0)
         InterlockedAdd(count[0], 1);
 
-    if (id.y == terrainHeight && vox.ID != 0 && id.y < 240)
+    if (id.y == terrainHeight && voxelId != 0 && id.y < 240)
     {
         bool placeFoliage = noise(float3(posXZ * 2, seed)) > 0.999;
 
@@ -191,7 +186,8 @@ void FillArray(uint3 id : SV_DispatchThreadID)
             }
         }
     }
-
+    
+    UpdateVoxelData(0, voxelId, vox.VoxelData);
     voxelArray[flattenCoord(id)] = vox;
 }
 
@@ -199,8 +195,6 @@ void FillArray(uint3 id : SV_DispatchThreadID)
 void ClearArray(uint3 id : SV_DispatchThreadID)
 {
     Voxel emptyVoxel;
-    emptyVoxel.ID = 0;
-    emptyVoxel.ActiveValue = 0;
-    emptyVoxel.CantUpdateFurther = 1;
+    emptyVoxel.VoxelData = 0;
     voxelArray[flattenCoord(id)] = emptyVoxel;
 }
