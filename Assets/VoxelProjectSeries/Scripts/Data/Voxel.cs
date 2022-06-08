@@ -5,16 +5,18 @@ using UnityEngine;
 public struct Voxel
 {
     public int voxelData;
+    public uint densityData;
+    public uint densityDataB;
 
     public byte ID
     {
         get
         {
-            return GetVoxelData(0);
+            return (byte)((voxelData & (0xff << 0)) >> 0);
         }
         set
         {
-            UpdateVoxelData(0, value);
+            voxelData |=  value << 0;
         }
     }
 
@@ -22,37 +24,52 @@ public struct Voxel
     {
         get
         {
-            return GetVoxelData(1);
+            return (byte)((voxelData & (0xff << 8)) >> 8);
         }
         set
         {
-            UpdateVoxelData(1, value);
+            voxelData |=  value << (8);
         }
     }
-    //From root coord up - technically a range of 0-100
-    public byte terrainHeight
+
+    int IndexFromCoord(int x, int y, int z)
     {
-        get
+        return Mathf.RoundToInt(x) + (Mathf.RoundToInt(y) * 4) + (Mathf.RoundToInt(z) * 4 * 4);
+    }
+
+
+    public bool getVoxelDensity(int x, int y, int z)
+    {
+        int index = IndexFromCoord(x, y, z);
+        if (index >= 32)
         {
-            return GetVoxelData(2);
+            index -= 32;
+
+            return (densityDataB& (0x1u << (index))) != 0;
         }
-        set
+        else
+            return (densityData& (0x1u << index)) != 0;
+
+    }
+    public void setVoxelDensity(int x, int y, int z, bool value)
+    {
+        int index = IndexFromCoord(x, y, z);
+
+        if (index >= 32)
         {
-            UpdateVoxelData(2, value);
+            index -= 32;
+            if (value)
+                densityDataB |= 0x1u << index;
+            else
+                densityDataB &= ~(0x1u << index);
         }
-    }
-
-
-
-    byte GetVoxelData(byte component)
-    {
-        byte shift = (byte)(8 * component);
-        return (byte)((voxelData & (0xff << shift)) >> shift);
-    }
-
-    void UpdateVoxelData(int component, byte value)
-    {
-        voxelData |=  value << (8 * component);
+        else
+        {
+            if (value)
+                densityData |= 0x1u << index;
+            else
+                densityData &= ~(0x1u << index);
+        }
     }
 
     public bool isSolid

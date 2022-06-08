@@ -170,8 +170,7 @@ public class Chunk : MonoBehaviour
 
         mesh.SetColors(meshData.colors, 0, faceCount[0]);
 
-        if (!WorldManager.WorldSettings.sharedVertices)
-            mesh.RecalculateNormals();
+        mesh.RecalculateNormals();
 
         mesh.RecalculateBounds();
         mesh.UploadMeshData(false);
