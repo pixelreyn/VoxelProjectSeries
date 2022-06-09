@@ -6,6 +6,7 @@
 struct sharedVert
 {
     uint index;
+    float3 pnt;
     bool set;
 };
 
@@ -34,108 +35,78 @@ float packFloats(float xF, float yF)
     return (output.x * 100) + output.y;
 }
 
-float2 unpackFloats(float f)
-{
-    int input = int(f);
-
-    float x = input >> 8 & 0xff;
-    float y = input >> 0 & 0xff;
-
-    return float2(x, y);
-}
-
 uint flattenCoord(uint3 idx)
 {
     return idx.x + (idx.y * (chunkSizeX + 3)) + (idx.z * (chunkSizeX + 3) * (chunkSizeY + 1));
 }
 
-bool VoxelIsSolid(uint3 pos)
+float3 ApproximateZeroCrossing(float3 adjacentPos, float3 adjacency)
 {
-    return GetVoxelData(0, voxelArray[flattenCoord(pos)].VoxelData) != 0;
-}
+    float3 pnt, roundedDown, stepF;
+    int3 step;
+    float t = 0, currentT = 0, increment = .25;
+    bool startDensity = false;
+    bool initial = false;
+    while (currentT <= 1)
+    {
+        pnt = adjacentPos + (adjacency - adjacentPos) * currentT;
+        roundedDown = floor(pnt);
+        stepF = (pnt - roundedDown) * 4;
+        step = (int3) stepF;
 
-bool VoxelIsTransparent(uint3 pos)
-{
-    return GetVoxelData(0, voxelArray[flattenCoord(pos)].VoxelData) == 240;
-}
+        /*if (!initial)
+        {
+            startDensity = voxelArray[flattenCoord(roundedDown)].getVoxelDensity(step.x, step.y, step.z);
+            initial = true;
+        }
+        else*/
+        {
+            if (voxelArray[flattenCoord(roundedDown)].getVoxelDensity(step.x, step.y, step.z) != startDensity)
+            {
+                t = currentT;
+                break;
+            }
 
-static uint3 getCellCenterForIDX(int idx, int axis, int corner)
-{
-    uint3 cellCenter = CellCentersByAxis[axis][corner];
-    if (voxelVertices[idx].x == 1 && CellCentersByAxis[axis][corner].x == -1)
-        cellCenter.x = 1;
+        }
 
-    if (voxelVertices[idx].y == 1 && CellCentersByAxis[axis][corner].y == -1)
-        cellCenter.y = 1;
+        currentT += increment;
+    }
 
-    if (voxelVertices[idx].z == 1 && CellCentersByAxis[axis][corner].z == -1)
-        cellCenter.z = 1;
-
-    return cellCenter;
+    return adjacentPos + (adjacency - adjacentPos) * t;
 }
 
 void calculateContour(uint3 blockCoord, out float3 position, out float3 normal, float3 vertexPos, int idx)
 {
-    Voxel currentCell, adjacentCell, adjacentRootCell;
-    float adjacentCellDensitiy = 0, adjacentRootCellDensity = 0;
-    float3 adjacentCellPos;
-    float3 adjacentCellRoot;
-    float3 liveCellPos;
-    int adjacentRootCellId;
-    int adjacentCellId;
-    uint3 vWorldPos = blockCoord + vertexPos; //take local block coord, add the cubed position
+    Voxel adjacentVoxel, adjacentVoxelB;
+    float3 adjacentCell, adjacentCellB;
+    float3 vWorldPos = blockCoord + vertexPos; //take local block coord, add the cubed position
     int counter = 0;
-    currentCell = voxelArray[flattenCoord(blockCoord)];
-    int currentCellId = GetVoxelData(0, currentCell.VoxelData);
-
+    
     for (int ax = 0; ax < 3; ax++)
     {
         for (int corner = 0; corner < 4; corner++)
         {
-                
-            adjacentCellRoot = blockCoord + getCellCenterForIDX(idx, ax, corner);
-            adjacentCellPos = adjacentCellRoot + axis[idx][ax];
-
-            adjacentRootCell = voxelArray[flattenCoord(adjacentCellRoot)];
-            adjacentCell = voxelArray[flattenCoord(adjacentCellPos)];
+            adjacentCell = vWorldPos + CellCentersByAxis[ax][corner]; //getCellCenterForIDX(0, ax, corner);
+            adjacentCellB = adjacentCell + axis[ax];
             
-            adjacentRootCellId = GetVoxelData(0, adjacentRootCell.VoxelData);
-            adjacentCellId = GetVoxelData(0, adjacentCell.VoxelData);
-
-            if (adjacentRootCellId == 240 && currentCellId != 240)
-                adjacentRootCellId = 0;
-            if (adjacentCellId == 240 && currentCellId != 240)
-                adjacentCellId = 0;
-
-            if (currentCellId == 240 && adjacentRootCellId != 240)
-                adjacentRootCellId = 0;
-            if (currentCellId == 240 && adjacentCellId != 240)
-                adjacentCellId = 0;
-
-            adjacentRootCellDensity = adjacentRootCellId != 0 ? 1 : 0;
-            adjacentCellDensitiy = adjacentCellId != 0 ? 1 : 0;
-            
-            normal += (adjacentCellDensitiy - adjacentRootCellDensity) * -axis[idx][ax];
-            if (adjacentRootCellDensity != adjacentCellDensitiy)
+            adjacentVoxel = voxelArray[flattenCoord(adjacentCell)];
+            adjacentVoxelB = voxelArray[flattenCoord(adjacentCellB)];
+           
+            if (adjacentVoxel.isSolid() != adjacentVoxelB.isSolid())
             {
-                liveCellPos = adjacentCellId != 0 ? adjacentCellPos : adjacentCellRoot;
-                adjacentCellPos = adjacentCellId == 0 ? adjacentCellPos : adjacentCellRoot;
-                
-                position += adjacentCellPos + ((liveCellPos - adjacentCellPos) * getCellCenterForIDX(idx, ax, corner)) / 2; //lerp(adjacentCellRoot + ((float3) (adjacentCellPos - adjacentCellRoot) * ((0 - adjacentRootCellDensity) / (adjacentCellDensitiy - adjacentRootCellDensity))), vWorldPos, 0); //change 0 to byte value
+                position += ApproximateZeroCrossing(adjacentCell, adjacentCellB);
                 counter++;
             }
+
         }
     }
-    
-    if (counter == 0)
-    {
-        position = vWorldPos;
-        counter = 1;
-    }
 
-    normal = normalize(normal / counter);
+    normal = float3(0, 0, 0);
     position /= counter;
-
+    
+    if (any(position < vWorldPos - float3(1, 1, 1)) || any(position > vWorldPos + float3(1, 1, 1)))
+        position = vWorldPos;
+    
 }
 
 [numthreads(8,8,8)]
@@ -145,33 +116,36 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         return;
     
     Voxel block = voxelArray[flattenCoord(id)];
-    int blockID = GetVoxelData(0, block.VoxelData);
+    int blockID = block.getId();
 
     if (blockID == 0)
         return;
     
-    float3 faceVertices[4];
-    float3 faceNorms[4];
     float4 color = float4(blockID == 240 ? 240 :
         (useTextures && voxelColors[blockID - 1].color == -1 ? ((float) blockID - 1) : voxelColors[blockID - 1].color),
         packFloats(voxelColors[blockID - 1].metallic, voxelColors[blockID - 1].smoothness), 0, 0);
     uint vertCount = 0;
     uint triCount = 0;
     
-    sharedVert sharedVerts[8];
-    for (int i = 0; i < 8; i++)
+    sharedVert verts[8];
+    
+    for (int j = 0; j < 8; j++)
     {
-        sharedVerts[i].set = false;
-        sharedVerts[i].index = 0;
+        float3 pos, norm;
+        calculateContour(id, pos, norm, voxelVertices[j], j);
+        pos += chunkPosition;
+        verts[j].pnt = pos;
+        verts[j].set = false;
     }
+    
     for (int i = 0; i < 6; i++)
     {
         
         //Check if there's a solid block against this face
-        if (VoxelIsSolid(id + voxelFaceChecks[i]) && !VoxelIsTransparent(id + voxelFaceChecks[i]))
+        if (any(id + voxelFaceChecks[i] < 0) || (voxelArray[flattenCoord(id + voxelFaceChecks[i])].isSolid() && !voxelArray[flattenCoord(id + voxelFaceChecks[i])].isTransparent()))
             continue;
 
-        if (blockID == 240 && VoxelIsTransparent(id + voxelFaceChecks[i]))
+        if (blockID == 240 && voxelArray[flattenCoord(id + voxelFaceChecks[i])].isTransparent())
             continue;
         
         //Draw this face
@@ -183,16 +157,11 @@ void CSMain(uint3 id : SV_DispatchThreadID)
                 InterlockedAdd(counter[1], 6, triCount);
             else
                 InterlockedAdd(counter[2], 6, triCount);
-            
-            for (int j = 0; j < 4; j++)
-            {
-                calculateContour(id, faceVertices[j], faceNorms[j], voxelVertices[voxelVertexIndex[i][j]], voxelVertexIndex[i][j]);
-                faceVertices[j] += chunkPosition;
-            }
+           
         
             for (int k = 0; k < 6; k++)
             {
-                vertexBuffer[vertCount + k] = faceVertices[voxelTris[i][k]];
+                vertexBuffer[vertCount + k] = verts[voxelTrisMapped[i][k]].pnt;
                 color.b = voxelUVs[voxelTris[i][k]].x;
                 color.a = voxelUVs[voxelTris[i][k]].y;
                 colorBuffer[vertCount + k] = color;
@@ -211,28 +180,20 @@ void CSMain(uint3 id : SV_DispatchThreadID)
             for (int k = 0; k < 6; k++)
             {
                 int idx = voxelTrisMapped[i][k];
-                if (!sharedVerts[idx].set)
+                if (!verts[idx].set)
                 {
                     InterlockedAdd(counter[0], 1, vertCount);
-                    
-                    float3 vert;
-                    float3 norm;
-                    calculateContour(id, vert, norm, voxelVertices[idx], idx);
-                    sharedVerts[idx].set = true;
-                    sharedVerts[idx].index = vertCount;
-                    
-                    color.b = voxelUVs[voxelTris[i][k]].x;
-                    color.a = voxelUVs[voxelTris[i][k]].y;
-                    
-                    vertexBuffer[vertCount] = vert + chunkPosition;
-                    normalBuffer[vertCount] = norm;
+                    verts[idx].index = vertCount;
+            
+                    vertexBuffer[vertCount] = verts[idx].pnt;
+                    normalBuffer[vertCount] = float3(0, 0, 0);
                     colorBuffer[vertCount] = color;
                 }
-                
+				
                 if (blockID != 240)
-                    indexBuffer[triCount + k] = sharedVerts[idx].index;
+                    indexBuffer[triCount + k] = verts[idx].index;
                 else
-                    transparentIndexBuffer[triCount + k] = sharedVerts[idx].index;
+                    transparentIndexBuffer[triCount + k] = verts[idx].index;
             }
 
         }

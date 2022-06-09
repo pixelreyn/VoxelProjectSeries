@@ -273,7 +273,7 @@ public class NoiseBuffer
         countBuffer.SetData(new uint[] {0, 0});
 
         voxelArray = new IndexedArray<Voxel>();
-        noiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 4);
+        noiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 12);
         Initialized = true;
     }
 
@@ -318,7 +318,7 @@ public class MeshBuffer
         colorBuffer ??= new ComputeBuffer(maxVertices*3, 16);
         normalBuffer ??= new ComputeBuffer(maxNormals, 12);
         indexBuffer ??= new ComputeBuffer(maxTris*3, 4); 
-        modifiedNoiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 4);
+        modifiedNoiseBuffer = new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 12);
         transparentIndexBuffer ??= new ComputeBuffer(maxTris*3, 4);
 
         Initialized = true;

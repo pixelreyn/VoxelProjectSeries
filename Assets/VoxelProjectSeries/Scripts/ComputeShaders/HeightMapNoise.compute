@@ -80,24 +80,22 @@ float fractalNoise(float2 pos, int noisePosition)
     return clamp(v, 0, 1);
 }
 
-
-
-bool sampleHeightAtPoint(float2 pos, out uint terrainHeight, out uint noiseIndex) {
-    float height = 0;
-
-    float strongestWeight = 0;
-
-    uint count = 0;
-    float heightWeight;
-    int i = 0;
-
-    float weightH = fractalNoise(pos, i);
-    height = clamp((weightH * 240), 0, 250);
-
-    noiseIndex = 0;
-    terrainHeight = round(height);
+bool getDensityAtPoint(float3 pos, out int roundedHeight, out float density)
+{
+    NoiseLayer selectednoise = noiseArray[0];
+    
+    float weightH = fractalNoise(pos.xz, 0);
+    float height = weightH * 128;
+    roundedHeight = floor(height);
+    bool hollow = distance(evaluateNoise(pos, roundedHeight), selectednoise.caveThreshold) < 0.125;
+    
+    if (pos.y <= 1)
+        hollow = false;
+    
+    density = hollow ? 1000 : pos.y - height;
     return true;
 }
+
 
 [numthreads(8, 8, 8)]
 void FillArray(uint3 id : SV_DispatchThreadID)
@@ -107,54 +105,44 @@ void FillArray(uint3 id : SV_DispatchThreadID)
     
     float3 pos = id + chunkPosition + seedOffset;
     float2 posXZ = pos.xz;
-    
-    if (GetVoxelData(0, voxelArray[flattenCoord(id)].VoxelData) != 0)
-        return;
-
-    uint terrainHeight;
-    uint noiseIndex;
-    sampleHeightAtPoint(posXZ, terrainHeight, noiseIndex);
-    NoiseLayer selectednoise = noiseArray[noiseIndex];
 
     Voxel vox;
-    vox.VoxelData = 0;
+    vox.voxelData = 0;
+    vox.densityData = 0u;
+    vox.densityDataB = 0u;
     int voxelId = 0;
-
-    if (id.y > terrainHeight)
-    {
-        voxelId = 0;
-        
-        if (voxelId == 0 && id.y <= 2)
-        {
-            voxelId = 240;
-            InterlockedAdd(count[0], 1);
-        }
-        
-        UpdateVoxelData(0, voxelId, vox.VoxelData);
-        voxelArray[flattenCoord(id)] = vox;
-        return;
-    }
-
-    bool isSurfaceBlock = id.y >= terrainHeight - 3;
-
-    voxelId = isSurfaceBlock ? selectednoise.surfaceVoxelId : selectednoise.subSurfaceVoxelId;
     
-    if (generateCaves && evaluateNoise(pos, terrainHeight) > selectednoise.caveThreshold)
-    {
-        voxelId = 0;
-    }
-
-    if (id.y <= 1 && forceFloor)
-        voxelId = selectednoise.surfaceVoxelId;
-
+    NoiseLayer selectednoise = noiseArray[0];
+    int roundedHeight;
+    float density;
+    
+    getDensityAtPoint(pos, roundedHeight, density);
+    
+    bool isSurfaceBlock = pos.y >= roundedHeight - 3;
+    int ida = isSurfaceBlock ? selectednoise.surfaceVoxelId : selectednoise.subSurfaceVoxelId;
+    
+    
+    if (density <= 0)
+        voxelId = ida;
+   
+    for (int iX = 0; iX < 4; iX++)
+        for (int iY = 0; iY < 4; iY++)
+            for (int iZ = 0; iZ < 4; iZ++)
+            {
+                getDensityAtPoint(pos + (float3(iX, iY, iZ) * 0.25), roundedHeight, density);
+                if (distance(density, 0) < .125)
+                {
+                    vox.setVoxelDensity(iX, iY, iZ, true);
+                }
+            }
 
     if (voxelId != 0)
         InterlockedAdd(count[0], 1);
 
-    if (id.y == terrainHeight && voxelId != 0 && id.y < 240)
+    if (id.y == (uint) roundedHeight && voxelId != 0 && id.y < 240)
     {
         bool placeFoliage = noise(float3(posXZ * 2, seed)) > 0.999;
-
+        //placeFoliage = false;
         if (placeFoliage)
         {
             int typeOf = noise(float3(pos.xz * 25, seed)) * 75;
@@ -164,10 +152,10 @@ void FillArray(uint3 id : SV_DispatchThreadID)
             else if (typeOf < 45)
             {
                 bool canSpawnTree = true;
-                uint tHeight, index;
+                int tHeight, index;
                 for (int x = -1; x <= 1; x++)
                     for (int z = -1; z <= 1; z++)
-                        if (sampleHeightAtPoint(posXZ + float2(x, z), tHeight, index) && tHeight != terrainHeight)
+                        if (getDensityAtPoint(pos, tHeight, density) && tHeight != roundedHeight)
                             canSpawnTree = false;
 
                 if (canSpawnTree)
@@ -180,14 +168,16 @@ void FillArray(uint3 id : SV_DispatchThreadID)
 
             int counter = 0;
 
-            if (foliageID != 0) {
+            if (foliageID != 0)
+            {
                 InterlockedAdd(count[1], 1, counter);
                 specialBlocksBuffer[counter] = float4(id + float3(0, 1, 0), foliageID);
             }
         }
     }
     
-    UpdateVoxelData(0, voxelId, vox.VoxelData);
+    
+    vox.setId(voxelId);
     voxelArray[flattenCoord(id)] = vox;
 }
 
@@ -195,6 +185,8 @@ void FillArray(uint3 id : SV_DispatchThreadID)
 void ClearArray(uint3 id : SV_DispatchThreadID)
 {
     Voxel emptyVoxel;
-    emptyVoxel.VoxelData = 0;
+    emptyVoxel.voxelData = 0;
+    emptyVoxel.densityData = 0u;
+    emptyVoxel.densityDataB = 0u;
     voxelArray[flattenCoord(id)] = emptyVoxel;
 }

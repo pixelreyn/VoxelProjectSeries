@@ -58,22 +58,14 @@ static const int voxelTrisMapped[6][6] =
     {2,6,7,2,7,3},//top
 };
 
-static const int3 axis[8][3] = 
+static const float3 axis[3] =
 {
-    {int3(-1,0,0),int3(0,-1,0), int3(0,0,-1)},
-    {int3(1,0,0), int3(0,-1,0), int3(0,0,-1)},
-    {int3(-1,0,0),int3(0, 1, 0),int3(0, 0, -1)},
-    {int3(1,0,0), int3(0,1,0),  int3(0,0,-1)},
-
-    {int3(-1,0,0), int3(0,-1,0), int3(0,0,1)},
-    {int3(1,0,0), int3(0,-1,0), int3(0,0,1)},
-    {int3(-1,0,0), int3(0,1,0), int3(0,0,1)},
-    {int3(1,0,0), int3(0,1,0), int3(0,0,1)}
+    float3(-1, 0, 0), float3(0, -1, 0), float3(0, 0, -1),
 };
 
-static const int3 CellCentersByAxis[3][4] = 
+static const float3 CellCentersByAxis[3][4] =
 {
-    { int3(0, -1, -1), int3(0, 0, -1), int3(0, 0, 0), int3(0, -1, 0) },
-    { int3(-1, 0, -1), int3(0, 0, -1), int3(0, 0, 0), int3(-1, 0, 0) },
-    { int3(-1, -1, 0), int3(0, -1, 0), int3(0, 0, 0), int3(-1, 0, 0) }
+    { float3(0, -1, -1), float3(0, 0, -1), float3(0, 0, 0), float3(0, -1, 0) },
+    { float3(-1, 0, -1), float3(0, 0, -1), float3(0, 0, 0), float3(-1, 0, 0) },
+    { float3(-1, -1, 0), float3(0, -1, 0), float3(0, 0, 0), float3(-1, 0, 0) }
 };
