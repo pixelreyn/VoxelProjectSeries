@@ -52,7 +52,7 @@ public class ComputeManager : MonoBehaviour
         voxelColorsArray = new ComputeBuffer(convertedVoxelDetails.Length, 12);
         voxelColorsArray.SetData(convertedVoxelDetails);
 
-        voxelShader.SetBuffer(0, "voxelColors", voxelColorsArray);
+        voxelShader.SetBuffer(2, "voxelColors", voxelColorsArray);
         voxelShader.SetInt("chunkSizeX", WorldManager.WorldSettings.chunkSize);
         voxelShader.SetInt("chunkSizeY", WorldManager.WorldSettings.maxHeight);
         voxelShader.SetBool("sharedVertices", WorldManager.WorldSettings.sharedVertices);
@@ -96,17 +96,26 @@ public class ComputeManager : MonoBehaviour
 
     public void GenerateVoxelMesh(Vector3 pos, MeshBuffer meshBuffer)
     {
-        meshBuffer.countBuffer.SetData(new uint[] { 0, 0, 0});
+        meshBuffer.countBuffer.SetData(new uint[] { 0, 0, 0 });
         voxelShader.SetVector("chunkPosition", pos);
-
         voxelShader.SetBuffer(0, "voxelArray", meshBuffer.modifiedNoiseBuffer);
         voxelShader.SetBuffer(0, "counter", meshBuffer.countBuffer);
-        voxelShader.SetBuffer(0, "vertexBuffer", meshBuffer.vertexBuffer);
-        voxelShader.SetBuffer(0, "normalBuffer", meshBuffer.normalBuffer);
-        voxelShader.SetBuffer(0, "colorBuffer", meshBuffer.colorBuffer);
-        voxelShader.SetBuffer(0, "indexBuffer", meshBuffer.indexBuffer);
-        voxelShader.SetBuffer(0, "transparentIndexBuffer", meshBuffer.transparentIndexBuffer);
+        voxelShader.SetBuffer(0, "cellVertices", meshBuffer.cellVerticesBuffer);
         voxelShader.Dispatch(0, xThreads, yThreads, xThreads);
+
+        voxelShader.SetBuffer(1, "voxelArray", meshBuffer.modifiedNoiseBuffer);
+        voxelShader.SetBuffer(1, "cellVertices", meshBuffer.cellVerticesBuffer);
+        voxelShader.Dispatch(1, xThreads, yThreads, xThreads);
+
+        voxelShader.SetBuffer(2, "voxelArray", meshBuffer.modifiedNoiseBuffer);
+        voxelShader.SetBuffer(2, "counter", meshBuffer.countBuffer);
+        voxelShader.SetBuffer(2, "vertexBuffer", meshBuffer.vertexBuffer);
+        voxelShader.SetBuffer(2, "normalBuffer", meshBuffer.normalBuffer);
+        voxelShader.SetBuffer(2, "cellVertices", meshBuffer.cellVerticesBuffer);
+        voxelShader.SetBuffer(2, "colorBuffer", meshBuffer.colorBuffer);
+        voxelShader.SetBuffer(2, "indexBuffer", meshBuffer.indexBuffer);
+        voxelShader.SetBuffer(2, "transparentIndexBuffer", meshBuffer.transparentIndexBuffer);
+        voxelShader.Dispatch(2, xThreads, yThreads, xThreads);
 
         AsyncGPUReadback.Request(meshBuffer.countBuffer, (callback) =>
         {
@@ -121,13 +130,6 @@ public class ComputeManager : MonoBehaviour
             }
 
         });
-    }
-
-    private void ClearVoxelData(NoiseBuffer buffer)
-    {
-        buffer.countBuffer.SetData(new int[] { 0 });
-        noiseShader.SetBuffer(1, "voxelArray", buffer.noiseBuffer);
-        noiseShader.Dispatch(1, xThreads, yThreads, xThreads);
     }
 
     #region MeshBuffer Pooling
@@ -192,8 +194,13 @@ public class ComputeManager : MonoBehaviour
 
     public void ClearAndRequeueBuffer(NoiseBuffer buffer)
     {
-        ClearVoxelData(buffer);
-        availableNoiseComputeBuffers.Enqueue(buffer);
+        buffer.countBuffer.SetData(new int[] { 0 });
+        noiseShader.SetBuffer(1, "voxelArray", buffer.noiseBuffer);
+        noiseShader.Dispatch(1, xThreads, yThreads, xThreads);
+        AsyncGPUReadback.Request(buffer.countBuffer, (callback) =>
+        {
+            availableNoiseComputeBuffers.Enqueue(buffer);
+        });
     }
     #endregion
 
@@ -291,6 +298,7 @@ public class NoiseBuffer
 public class MeshBuffer
 {
     public ComputeBuffer vertexBuffer;
+    public ComputeBuffer cellVerticesBuffer;
     public ComputeBuffer normalBuffer;
     public ComputeBuffer colorBuffer;
     public ComputeBuffer indexBuffer;
@@ -310,11 +318,12 @@ public class MeshBuffer
         countBuffer = new ComputeBuffer(3, 4, ComputeBufferType.Raw);
         countBuffer.SetData(new uint[] { 0, 0, 0 });
 
-        int maxTris = WorldManager.WorldSettings.chunkSize * WorldManager.WorldSettings.maxHeight * WorldManager.WorldSettings.chunkSize / 4;
+        int maxTris = WorldManager.WorldSettings.chunkSize * WorldManager.WorldSettings.maxHeight * WorldManager.WorldSettings.chunkSize / 3;
         //width*height*width*faces*tris
         int maxVertices = WorldManager.WorldSettings.sharedVertices ? maxTris / 3 : maxTris;
         int maxNormals = WorldManager.WorldSettings.sharedVertices ? maxVertices * 3 : 1;
         vertexBuffer ??= new ComputeBuffer(maxVertices*3, 12);
+        cellVerticesBuffer ??= new ComputeBuffer(WorldManager.WorldSettings.ChunkCount, 28);
         colorBuffer ??= new ComputeBuffer(maxVertices*3, 16);
         normalBuffer ??= new ComputeBuffer(maxNormals, 12);
         indexBuffer ??= new ComputeBuffer(maxTris*3, 4); 
@@ -327,6 +336,7 @@ public class MeshBuffer
     public void Dispose()
     {
         vertexBuffer?.Dispose();
+        cellVerticesBuffer?.Dispose();
         normalBuffer?.Dispose();
         colorBuffer?.Dispose();
         indexBuffer?.Dispose();

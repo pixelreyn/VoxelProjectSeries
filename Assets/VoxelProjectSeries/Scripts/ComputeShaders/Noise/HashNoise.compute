@@ -7,7 +7,7 @@ float hash(float3 p)  // replace this by something better
 	return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
 }
 
-float noise(in float3 x)
+float hnoise(in float3 x)
 {
 	float3 i = floor(x);
 	float3 f = frac(x);

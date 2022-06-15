@@ -98,7 +98,7 @@ public static class StructureManager
 				{
 					posX = pos + new Vector3(x, y, z);
 					bool lowerY = false;
-					if (posX.x > 0 && posX.x < 16 && posX.z > 0 && posX.z < 16 && posX.y > 1)
+					if (posX.x > 0 && posX.x < WorldManager.WorldSettings.chunkSize && posX.z > 0 && posX.z < WorldManager.WorldSettings.chunkSize && posX.y > 1)
 						lowerY = cont[posX - Vector3.up].ID == 0;
 					WorldManager.Instance.SetVoxelAtCoord(chunk.chunkPosition, pos + new Vector3(x, lowerY ? y - 1 : y, z), new Voxel { ID = 5, densityData = uint.MaxValue, densityDataB = uint.MaxValue });
 				}

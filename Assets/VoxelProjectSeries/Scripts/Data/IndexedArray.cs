@@ -29,7 +29,7 @@ public class IndexedArray<T> where T : struct
 
     private void Create(int sizeX, int sizeY)
     {
-        size = new Vector2Int(sizeX + 3, sizeY + 1);
+        size = new Vector2Int(sizeX + 5, sizeY + 1);
         array = new T[Count];
         initialized = true;
     }

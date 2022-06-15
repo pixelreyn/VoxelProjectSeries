@@ -528,13 +528,13 @@ MonoBehaviour:
     metallic: 0.2
     smoothness: 0.5
   worldSettings:
-    chunkSize: 16
+    chunkSize: 32
     maxHeight: 256
-    renderDistance: 64
+    renderDistance: 32
     sharedVertices: 0
     useTextures: 1
   mainCamera: {fileID: 414495109}
-  maxChunksToProcessPerFrame: 6
+  maxChunksToProcessPerFrame: 3
 --- !u!114 &1755072227
 MonoBehaviour:
   m_ObjectHideFlags: 0
