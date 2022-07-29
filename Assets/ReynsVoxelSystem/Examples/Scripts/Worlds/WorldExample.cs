@@ -4,7 +4,13 @@ using UnityEngine;
 
 public class WorldExample : World
 {
-    bool generationStarted = false;
+    bool generationStarted = false;    
+    
+    //For any custom startup functionallity
+    public override void OnStart()
+    {
+        GenerateLevel();
+    }
     //You can use this function for tracking the player position and forcing updates
     public override void DoUpdate()
     {
@@ -31,12 +37,6 @@ public class WorldExample : World
         GenerationManager.voxelData.SetBuffer(1, "voxelArray", genBuffer.noiseBuffer);
         GenerationManager.voxelData.SetBuffer(1, "count", genBuffer.countBuffer);
         GenerationManager.voxelData.Dispatch(1, xThreads, yThreads, xThreads);
-    }
-
-    //For any custom startup functionallity
-    public override void OnStart()
-    {
-        GenerateLevel();
     }
 
 

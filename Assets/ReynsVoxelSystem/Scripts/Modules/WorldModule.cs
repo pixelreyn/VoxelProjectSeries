@@ -36,7 +36,6 @@ public abstract class WorldModule : MonoBehaviour
     
     public virtual void OnShutdown()
     {
-        
         World.onShutdown -= OnShutdown;
     }	
     private void OnDestroy()
