@@ -311,21 +311,6 @@
 
 {
     "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
-    "m_ObjectId": "030d38bb5cd4471b9a9b308493736c3a",
-    "m_Id": 0,
-    "m_DisplayName": "inputs",
-    "m_SlotType": 0,
-    "m_Hidden": false,
-    "m_ShaderOutputName": "inputs",
-    "m_StageCapability": 3,
-    "m_Value": 0.0,
-    "m_DefaultValue": 0.0,
-    "m_Labels": []
-}
-
-{
-    "m_SGVersion": 0,
     "m_Type": "UnityEditor.ShaderGraph.Vector2Node",
     "m_ObjectId": "11a19de4729a4ae386b5eefb723c0943",
     "m_Group": {
@@ -752,7 +737,7 @@
     },
     "m_Slots": [
         {
-            "m_Id": "030d38bb5cd4471b9a9b308493736c3a"
+            "m_Id": "cf3f83e390d749b1beaf269371a3278b"
         },
         {
             "m_Id": "9fd5fef50a184f10b29610aadca09d97"
@@ -771,7 +756,7 @@
     "m_SourceType": 1,
     "m_FunctionName": "UnpackFloats",
     "m_FunctionSource": "",
-    "m_FunctionBody": "float2 output;\noutput.y = inputs % 100;\noutput.x = floor(inputs / 100);\noutput /= (100  - 1);\nx = output.x;\ny = output.y;"
+    "m_FunctionBody": "float2 output;\r\nint inputs = asint(input);\r\noutput.y = inputs & (0xff << 8) >> 8;\r\noutput.x = inputs & (0xff <<0 ) >> 0;\r\noutput /= 100;\r\nx = output.x;\r\ny = output.y;"
 }
 
 {
@@ -1351,6 +1336,21 @@
     "m_CustomColors": {
         "m_SerializableColors": []
     }
+}
+
+{
+    "m_SGVersion": 0,
+    "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
+    "m_ObjectId": "cf3f83e390d749b1beaf269371a3278b",
+    "m_Id": 0,
+    "m_DisplayName": "input",
+    "m_SlotType": 0,
+    "m_Hidden": false,
+    "m_ShaderOutputName": "input",
+    "m_StageCapability": 3,
+    "m_Value": 0.0,
+    "m_DefaultValue": 0.0,
+    "m_Labels": []
 }
 
 {

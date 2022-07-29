@@ -386,9 +386,9 @@ public class WorldManager : MonoBehaviour
                 continue;
 
             if (direction[i] < 0)
-                pos[i] = 16 + pos[i];
+                pos[i] = (WorldSettings.chunkSize) + pos[i];
             if (direction[i] > 0)
-                pos[i] = pos[i] - 16;
+                pos[i] = pos[i] - (WorldSettings.chunkSize);
         }
 
         return pos;
@@ -399,137 +399,94 @@ public class WorldManager : MonoBehaviour
         bool canPlaceWithinChunk = true;
         Vector3[] neighborPos = new Vector3[3];
         int neighbor = 0;
+        int2 chunkRange = new int2(4, WorldSettings.chunkSize - 1);
+        float2 ind2 = new float2(index.x, index.z);
 
-        //Debug.Log(voxelPos + " " + baseChunkPos + " " + pos);
-        if (index.x < 2)
-        {
-            neighborPos[neighbor++] = chunkPosition + Vector3.left * 16;
-            if (index.x < 0)
-                canPlaceWithinChunk = false;
-        }
-        if (index.z < 2)
-        {
-            neighborPos[neighbor++] = chunkPosition + Vector3.back * 16;
-            if (index.z < 0)
-                canPlaceWithinChunk = false;
-        }
-        if (index.z < 2 && index.x < 2)
-        {
-            neighborPos[neighbor++] = chunkPosition + Vector3.back * 16 + Vector3.left * 16;
-            if (index.z < 0 || index.x < 0)
-                canPlaceWithinChunk = false;
-        }
-        if (index.x >= 16)
-        {
-            neighborPos[neighbor++] = chunkPosition + Vector3.right * 16;
-            if (index.x > 17)
-                canPlaceWithinChunk = false;
-        }
-        if (index.z >= 16)
-        {
-            neighborPos[neighbor++] = chunkPosition + Vector3.forward * 16;
-            if (index.z > 17)
-                canPlaceWithinChunk = false;
-        }
-        if (index.z >= 16 && index.x >= 16)
-        {
-            neighborPos[neighbor++] = chunkPosition + Vector3.forward * 16 + Vector3.right * 16;
-            if (index.z > 17 || index.x > 17)
-                canPlaceWithinChunk = false;
-        }
-        if (index.z >= 16 && index.x < 2)
-        {
-            neighborPos[neighbor++] = chunkPosition + Vector3.forward * 16 + Vector3.left * 16;
-            if (index.z > 17 || index.x < 0)
-                canPlaceWithinChunk = false;
-        }
-        if (index.x >= 16 && index.z < 2)
-        {
-            neighborPos[neighbor++] = chunkPosition + Vector3.back * 16 + Vector3.right * 16;
-            if (index.x > 17 || index.z < 0)
-                canPlaceWithinChunk = false;
-        }
+        if (math.any(ind2 < 0) || math.any(ind2 > WorldSettings.chunkSize + 3))
+            canPlaceWithinChunk = false;
 
-        bool isActive = value.ID == 240 && value.ActiveValue > 15;
-        if (neighbor > 0)
+        if (math.any(ind2 < chunkRange[0]) || math.any(ind2 > chunkRange[1]))
         {
-            for (int i = 0; i < neighbor; i++)
+            for (int i = 0; i < 3; i++)
             {
-                if (!modifiedVoxels.ContainsKey(neighborPos[i]))
-                    modifiedVoxels.Add(neighborPos[i], new Dictionary<Vector3, Voxel>());
-                Vector3 x = Vector3.zero;
-                x = convertOverageVectorIntoLocal(index, neighborPos[i] - chunkPosition);
-                if (x.x < 0 || x.z < 0 || x.x > 17 || x.z > 17)// == new Vector3(-32,0,-32))
+                float3 mod = new float3(0, 0, 0);
+                if (i == 1)
                 {
+                    if (math.any(ind2 < chunkRange[0]) && math.any(ind2 > chunkRange[1]))
+                    {
+                        mod[0] = ind2[0] < chunkRange[0] ? -1 : 1;
+                        mod[2] = ind2[1] < chunkRange[0] ? -1 : 1;
+                        mod *= WorldSettings.chunkSize;
+                        neighborPos[neighbor++] = chunkPosition + (Vector3)mod;
+                    }
                     continue;
                 }
 
-                if (isActive)
+                if (index[i] < chunkRange[0] || index[i] > chunkRange[1])
                 {
-                    if (!activeVoxels.ContainsKey(neighborPos[i]))
-                        activeVoxels.TryAdd(neighborPos[i], new ConcurrentDictionary<Vector3, Voxel>());
-                    if (!activeVoxels[neighborPos[i]].ContainsKey(x))
-                        activeVoxels[neighborPos[i]].TryAdd(x, value);
-                    else
-                        activeVoxels[neighborPos[i]][x] = value;
-                }
-                else
-                {
-                    if (!modifiedVoxels[neighborPos[i]].ContainsKey(x))
-                        modifiedVoxels[neighborPos[i]].Add(x, value);
-                    else
-                        modifiedVoxels[neighborPos[i]][x] = value;
+                    mod[i] = index[i] < chunkRange[0] ? -1 : 1;
+                    mod *= WorldSettings.chunkSize;
+                    neighborPos[neighbor++] = chunkPosition + (Vector3)mod;
                 }
 
-                //Make sure this chunk is enqueued to remesh
-                if (activeChunks.ContainsKey(neighborPos[i]))
-                {
-                    Chunk c = activeChunks[neighborPos[i]];
-                    if (c.chunkState != Chunk.ChunkState.WaitingToMesh)
-                    {
-                        c.chunkState = Chunk.ChunkState.WaitingToMesh;
-                        chunksNeedRegenerated.Enqueue(c.chunkPosition);
-                    }
-                }
             }
-
         }
+        if(math.all(ind2 < chunkRange[0]))
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.back * WorldSettings.chunkSize + Vector3.left * WorldSettings.chunkSize;
+        }
+        if (math.all(ind2 > chunkRange[1]))
+        {
+            neighborPos[neighbor++] = chunkPosition + Vector3.forward * WorldSettings.chunkSize + Vector3.right * WorldSettings.chunkSize;
+        }
+
+        for (int i = 0; i < neighbor; i++) {
+            Vector3 x = convertOverageVectorIntoLocal(index, neighborPos[i] - chunkPosition);
+            if (x.x < 0 || x.z < 0 || x.x > WorldSettings.chunkSize + 4 || x.z > WorldSettings.chunkSize + 4)// == new Vector3(-32,0,-32))
+            {
+                continue;
+            }
+            PlaceWithinChunk(neighborPos[i], x, value);
+        }
+        
         if (canPlaceWithinChunk)
         {
-
-            if (!modifiedVoxels.ContainsKey(chunkPosition))
-                modifiedVoxels.Add(chunkPosition, new Dictionary<Vector3, Voxel>());
-
-            if (isActive)
-            {
-                if (!activeVoxels.ContainsKey(chunkPosition))
-                    activeVoxels.TryAdd(chunkPosition, new ConcurrentDictionary<Vector3, Voxel>());
-                if (!activeVoxels[chunkPosition].ContainsKey(index))
-                    activeVoxels[chunkPosition].TryAdd(index, value);
-                else
-                    activeVoxels[chunkPosition][index] = value;
-            }
-            else
-            {
-                if (!modifiedVoxels.ContainsKey(chunkPosition))
-                    modifiedVoxels.Add(chunkPosition, new Dictionary<Vector3, Voxel>());
-                if (!modifiedVoxels[chunkPosition].ContainsKey(index))
-                    modifiedVoxels[chunkPosition].Add(index, value);
-                else
-                    modifiedVoxels[chunkPosition][index] = value;
-            }
-
-            if (activeChunks.ContainsKey(chunkPosition))
-            {
-                Chunk c = activeChunks[chunkPosition];
-                if (c.chunkState != Chunk.ChunkState.WaitingToMesh)
-                {
-                    c.chunkState = Chunk.ChunkState.WaitingToMesh;
-                    chunksNeedRegenerated.Enqueue(c.chunkPosition);
-                }
-            }
+            PlaceWithinChunk(chunkPosition, index, value);
         }
 
+    }
+
+    void PlaceWithinChunk(Vector3 chunkPosition, Vector3 localPos, Voxel value)
+    {
+        bool isActive = value.ID == 240 && value.ActiveValue > 15;
+        if (isActive)
+        {
+            if (!activeVoxels.ContainsKey(chunkPosition))
+                activeVoxels.TryAdd(chunkPosition, new ConcurrentDictionary<Vector3, Voxel>());
+            if (!activeVoxels[chunkPosition].ContainsKey(localPos))
+                activeVoxels[chunkPosition].TryAdd(localPos, value);
+            else
+                activeVoxels[chunkPosition][localPos] = value;
+        }
+        else
+        {
+            if (!modifiedVoxels.ContainsKey(chunkPosition))
+                modifiedVoxels.Add(chunkPosition, new Dictionary<Vector3, Voxel>());
+            if (!modifiedVoxels[chunkPosition].ContainsKey(localPos))
+                modifiedVoxels[chunkPosition].Add(localPos, value);
+            else
+                modifiedVoxels[chunkPosition][localPos] = value;
+        }
+
+        if (activeChunks.ContainsKey(chunkPosition))
+        {
+            Chunk c = activeChunks[chunkPosition];
+            if (c.chunkState != Chunk.ChunkState.WaitingToMesh)
+            {
+                c.chunkState = Chunk.ChunkState.WaitingToMesh;
+                chunksNeedRegenerated.Enqueue(c.chunkPosition);
+            }
+        }
     }
 }
 
@@ -543,6 +500,6 @@ public class WorldSettings
     public bool useTextures = false;
     public int ChunkCount
     {
-        get { return (chunkSize + 3) *( maxHeight+ 1) * (chunkSize+ 3); }
+        get { return (chunkSize + 5) *( maxHeight+ 1) * (chunkSize + 5); }
     }
 }

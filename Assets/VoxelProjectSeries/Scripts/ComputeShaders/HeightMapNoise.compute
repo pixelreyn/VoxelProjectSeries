@@ -39,9 +39,9 @@ uint oceanHeight;
 int noiseCount;
 int seed;
 
-int flattenCoord(uint3 idx)
+uint flattenCoord(float3 idx)
 {
-    return idx.x + (idx.y * (chunkSizeX + 3)) + (idx.z * (chunkSizeX + 3) * (chunkSizeY + 1));
+    return round(idx.x) + (round(idx.y) * (chunkSizeX + 5)) + (round(idx.z) * (chunkSizeX + 5) * (chunkSizeY + 1));
 }
 
 float evaluateNoise(float3 pos, float terrainHeight)
@@ -98,9 +98,11 @@ bool getDensityAtPoint(float3 pos, out int roundedHeight, out float density)
 
 
 [numthreads(8, 8, 8)]
-void FillArray(uint3 id : SV_DispatchThreadID)
+void FillArray(uint3 i : SV_DispatchThreadID)
 {
-    if (any(id.xz > chunkSizeX + 2))
+    float3 id = float3(i);
+    
+    if (any(id.xz > chunkSizeX + 3))
         return;
     
     float3 pos = id + chunkPosition + seedOffset;
@@ -141,11 +143,11 @@ void FillArray(uint3 id : SV_DispatchThreadID)
 
     if (id.y == (uint) roundedHeight && voxelId != 0 && id.y < 240)
     {
-        bool placeFoliage = noise(float3(posXZ * 2, seed)) > 0.999;
+        bool placeFoliage = hnoise(float3(posXZ * 2, seed)) > 0.999;
         //placeFoliage = false;
         if (placeFoliage)
         {
-            int typeOf = noise(float3(pos.xz * 25, seed)) * 75;
+            int typeOf = hnoise(float3(pos.xz * 25, seed)) * 75;
             int foliageID;
             if (typeOf < 30)
                 foliageID = 243;
@@ -182,8 +184,9 @@ void FillArray(uint3 id : SV_DispatchThreadID)
 }
 
 [numthreads(8, 8, 8)]
-void ClearArray(uint3 id : SV_DispatchThreadID)
+void ClearArray(uint3 i : SV_DispatchThreadID)
 {
+    float3 id = float3(i);
     Voxel emptyVoxel;
     emptyVoxel.voxelData = 0;
     emptyVoxel.densityData = 0u;
