@@ -1,0 +1,220 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &953515655
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 953515656}
+  - component: {fileID: 953515658}
+  - component: {fileID: 953515657}
+  - component: {fileID: 7975833743334383019}
+  - component: {fileID: 938703849}
+  m_Layer: 0
+  m_Name: Modules
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &953515656
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 953515655}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 5114316295409598399}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &953515658
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 953515655}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 46b313b94c69bd741919eeddf5a59f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &953515657
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 953515655}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbfb6cc3157df7b48a8934ad275949fe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &7975833743334383019
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 953515655}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b4ab811c047c254db9dc8c735e5a9db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &938703849
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 953515655}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d527e21128b4acb4f98d929468e6e742, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!1 &5114316295409598397
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5114316295409598399}
+  - component: {fileID: 8910370624794705678}
+  m_Layer: 0
+  m_Name: InfiniteTerrain
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &5114316295409598399
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5114316295409598397}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 58.598564, y: 101.06022, z: 22.289444}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children:
+  - {fileID: 953515656}
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8910370624794705678
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5114316295409598397}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5977df28d3bce1d4a9e7e43fbc7662f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  worldMaterials:
+  - {fileID: 2100000, guid: d41578d92bc26b04bb2355aed476d2cb, type: 2}
+  - {fileID: 2100000, guid: 313f0b3da4a8a8b4ea348a14fbeb4548, type: 2}
+  voxelDetails:
+  - texture: {fileID: 2800000, guid: 91c8551050efe5b4f98568ab6bb8526a, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 45584
+    metallic: 0.1
+    smoothness: 0.1
+  - texture: {fileID: 2800000, guid: d8602ed4b315737469e1357fc1a4ab58, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 24185
+    metallic: 0.6
+    smoothness: 0.2
+  - texture: {fileID: 2800000, guid: 89a155114ec087b499583ce18238d991, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 19058
+    metallic: 0.4
+    smoothness: 0.1
+  - texture: {fileID: 2800000, guid: cd4b7b16102268246ad0838ce2cce16a, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 55618
+    metallic: 0.1
+    smoothness: 0.1
+  - texture: {fileID: 2800000, guid: 1c0a6ec330d69c34492d9473599c266b, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 7763574
+    metallic: 0.2
+    smoothness: 0.5
+  - texture: {fileID: 2800000, guid: e70008fc71970104ba8071fb323a2362, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 9355730
+    metallic: 0.2
+    smoothness: 0.5
+  worldSettings:
+    tickTime: 300
+    chunkSize: 32
+    maxHeight: 256
+    renderDistance: 32
+    sharedVertices: 1
+    useTextures: 1
+  contouringShader: {fileID: 7200000, guid: 43aa5c376f0fe5248835aaed4ce1ff8b, type: 3}
+  densityGenerationShader: {fileID: 7200000, guid: 2f02a6167301c774d83b7600a477ddac,
+    type: 3}
+  maxChunksToProcessPerFrame: 4
+  biomes:
+  - surfaceVoxel: 1
+    subsurfaceVoxel: 2
+    foliage: 1
+    structures: 0
+    foliageIds: 0
+    foliageCount: 0
+    structureIds: 0
+    structureCount: 0
+    noiseScale: 1000
+    caveNoiseScale: 750
+    weight: 1.5
+    offset: {x: -20000, y: 55000, z: 55000}
+  - surfaceVoxel: 6
+    subsurfaceVoxel: 2
+    foliage: 1
+    structures: 0
+    foliageIds: 0
+    foliageCount: 0
+    structureIds: 0
+    structureCount: 0
+    noiseScale: 500
+    caveNoiseScale: 0
+    weight: 6
+    offset: {x: 55000, y: -15000, z: -20000}
+  - surfaceVoxel: 5
+    subsurfaceVoxel: 4
+    foliage: 1
+    structures: 0
+    foliageIds: 0
+    foliageCount: 0
+    structureIds: 0
+    structureCount: 0
+    noiseScale: 1200
+    caveNoiseScale: 0
+    weight: 0.2
+    offset: {x: 35000, y: -15000, z: -20000}
+  foliage: []
+  structures: []
+  seed: 0
+  mainCamera: {fileID: 0}

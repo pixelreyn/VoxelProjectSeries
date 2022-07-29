@@ -1,0 +1,90 @@
+#pragma kernel ClearArray
+#pragma kernel FillArray
+
+#include "WorldStructs.cginc"
+#include "SharedVariables.cginc"
+
+[numthreads(8, 8, 8)]
+void ClearArray(uint3 i : SV_DispatchThreadID)
+{
+    float3 id = float3(i);
+    Voxel emptyVoxel;
+    emptyVoxel.voxelData = 0;
+    emptyVoxel.densityData = 0u;
+    emptyVoxel.densityDataB = 0u;
+    voxelArray[flattenCoord(id)] = emptyVoxel;
+}
+
+float getDensity(float3 position, out float theight)
+{
+    float height = (Bcc8NoisePlaneFirst(float3(position.xz / 75, 0)) / 2) + 0.5;
+    height = clamp(height *  20, 1, chunkSizeY);
+    theight = floor(height);
+    return position.y - height;
+}
+
+[numthreads(8, 8, 8)]
+void FillArray(uint3 i : SV_DispatchThreadID)
+{
+    float3 id = float3(i);
+    
+    if (any(id.xz > (int) chunkSizeX + 3) || id.y > chunkSizeY)
+        return;
+    
+    float2 pos = id.xz + chunkPosition.xz;
+    Voxel voxel;
+    int voxelId = 0;
+    voxel.densityData = 0;
+    voxel.densityDataB = 0;
+    voxel.voxelData = 0;
+
+    /*if (distance(id, float3(10, 10, 10)) > 0.5) {
+        voxel.setId(voxelId);
+        voxelArray[flattenCoord(id)] = voxel;
+        return;
+    }
+    else {
+        voxelId = 1;
+        for (int iX = 0; iX < 4; iX++)
+            for (int iZ = 0; iZ < 4; iZ++)
+                for (int iY = 0; iY < 4; iY++)
+                        voxel.setVoxelDensity(iX, iY, iZ, true);
+            voxel.setId(voxelId);
+            voxelArray[flattenCoord(id)] = voxel;
+            return;
+    }*/
+    
+    float height;
+    float density = getDensity(id + chunkPosition, height);
+    
+    if (density <= 0)
+    {
+        if (id.y < height - 3)
+            voxelId = 2;
+        else
+            voxelId = 1;
+    }
+    
+    if (distance(density, 0) < 1)
+    {
+        for (int iX = 0; iX < 4; iX++)
+            for (int iZ = 0; iZ < 4; iZ++)
+            {
+                for (int iY = 0; iY < 4; iY++)
+                {
+                    density = getDensity(id + chunkPosition + (float3(iX, iY, iZ) * 0.25), height);
+                    if (distance(density, 0) < .125)
+                    {
+                        voxel.setVoxelDensity(iX, iY, iZ, true);
+                    }
+
+                }
+            }
+    }
+    if (voxelId != 0)
+        InterlockedAdd(count[0], 1);
+    
+    voxel.setId(voxelId);
+    voxelArray[flattenCoord(id)] = voxel;
+
+}

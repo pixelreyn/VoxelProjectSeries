@@ -1,0 +1,233 @@
+#pragma kernel GenHeightMap
+#pragma kernel FillArray
+#pragma kernel ClearArray
+
+#include "SharedVariables.cginc"
+#include "WorldStructs.cginc"
+
+
+RWStructuredBuffer<float2> heightMap;
+StructuredBuffer<Biome> biomeArray;
+RWStructuredBuffer<float4> specialBlocksBuffer;
+
+float3 seedOffset;
+
+bool generateCaves;
+bool forceFloor;
+
+uint maxHeight;
+uint oceanHeight;
+int biomeCount;
+int seed;
+
+uint flattenHeightMap(float2 idx)
+{
+    return idx.x + idx.y * ((chunkSizeX + 5) * 4);
+}
+
+float fractalNoise(float3 pos, int index, int terrainHeight, bool cave)
+{
+    Biome b = biomeArray[index];
+    int octaves = 3;
+    
+    float h = 1;
+    float G = exp2(-h);
+    float f = 1;
+    float a = 1;
+    float t = 0;
+    
+    for (int i = 0; i < 4; i++)
+    {
+        if(cave)
+            t += a * cnoise(f * (pos / ((uint) b.caveNoiseScale / (terrainHeight > (int) oceanHeight ? 1 : 6))));
+        else
+            t += a * ((Bcc8NoisePlaneFirst(float3((pos.xz / (b.noiseScale)), seed) * f) / 2) + 0.5);
+        f *= 2.0;
+        a *= G;
+    }
+    t = t * t;
+    return t;
+    
+}
+
+bool getDensityAtPoint(float3 pos, out float trueHeight, out int index)
+{
+    float weight;
+    float heighestWeight = -100;
+    float lowestWeight = 100;
+    float totalWeight = 0;
+    int strongestIndex = -1;
+    int lowestIndex = -1;
+    int count = 0;
+    for (int i = 0; i < biomeCount; i++)
+    {
+        weight = fractalNoise(pos + biomeArray[i].offsets, i, 0, false);
+        totalWeight += weight * biomeArray[i].weight;
+        
+        
+        if (weight >= 0)
+            count++;
+        
+        if (weight > heighestWeight && weight >= 0)
+        {
+            strongestIndex = i;
+            heighestWeight = weight;
+        }
+        if (weight < lowestWeight)
+        {
+            lowestIndex = i;
+            lowestWeight = weight;
+        }
+    }
+    index = strongestIndex;
+    float fHeight = (oceanHeight * 2)  * (heighestWeight * heighestWeight);
+    totalWeight = clamp(((totalWeight / count) * 32), 1, 250);
+    trueHeight = totalWeight;
+    
+    return true;
+}
+
+bool getDensityAtPoint(float3 pos, float trueHeight, int index, out float density, out int height)
+{
+    
+    bool cave = false;
+    if (generateCaves)
+        cave = fractalNoise(pos + biomeArray[index].offsets, index, trueHeight, true) > 0.75;
+    
+    density = cave ? 100 : pos.y - trueHeight;
+    height = round(trueHeight);
+    return true;
+}
+
+[numthreads(8,1,8)]
+void GenHeightMap(uint3 i : SV_DispatchThreadID)
+{
+    float3 id = float3(i);
+    if (any(id.xz > (int) ((chunkSizeX + 5) * 4)) || id.y != 0)
+        return;
+    
+    float3 pos = (id / 4) + chunkPosition + seedOffset;
+    float2 posXZ = pos.xz;
+    
+    float trueHeight, density;
+    int height;
+    int biomeIndex;
+    getDensityAtPoint(pos, trueHeight, biomeIndex);
+   
+    heightMap[(flattenHeightMap(id.xz))] = float2(trueHeight, asfloat(biomeIndex));
+}
+
+[numthreads(8, 8, 8)]
+void FillArray(uint3 i : SV_DispatchThreadID)
+{
+    float3 id = float3(i);
+    if (any(id.xz > chunkSizeX + 3))
+        return;
+    
+    float3 pos = id + chunkPosition + seedOffset;
+    float2 posXZ = pos.xz;
+    float2 hm = heightMap[flattenHeightMap(id.xz * 4)];
+
+    Voxel vox;
+    vox.voxelData = 0;
+    vox.densityData = 0u;
+    vox.densityDataB = 0u;
+    int voxelId = 0;
+    
+
+    int biomeIndex = asint(hm.y);
+    int roundedHeight;
+    float density;
+    
+    getDensityAtPoint(pos, hm.x, biomeIndex, density, roundedHeight);
+    
+    int floraH = roundedHeight;
+    
+    Biome selectedBiome = biomeArray[biomeIndex];
+    bool isSurfaceBlock = pos.y >= roundedHeight - 3;
+    int ida = isSurfaceBlock ? selectedBiome.surfaceVoxel : selectedBiome.subsurfaceVoxel;
+        
+    if (density <= 0 || (id.y <= 1 && forceFloor))
+        voxelId = ida;
+    
+
+    if (id.y < (int) oceanHeight - 1 && voxelId == 0)
+    {
+        voxelId = 240;
+    }
+    
+    
+    for (int iX = 0; iX < 4; iX++)
+        for (int iY = 0; iY < 4; iY++)
+            for (int iZ = 0; iZ < 4; iZ++)
+            {
+                float2 hmv = heightMap[flattenHeightMap((id.xz + float2(iX, iZ)) * 4)];
+                getDensityAtPoint(pos + float3(iX, iY, iZ) * 0.25, hmv.x, asint(hmv.y), density, roundedHeight);
+                if (distance(density, 0) < .125)
+                {
+                    vox.setVoxelDensity(iX, iY, iZ, true);
+                }
+            }
+
+
+    if (id.y == floraH && (voxelId != 0 && voxelId != 240) && id.y < 240 && selectedBiome.foliage == 1)
+    {
+        float val;
+        SimplexNoise3D_float(float3(posXZ * float2(95, 21), seed), val);
+        
+        bool placeFoliage = val > 0.925;
+        
+        if (placeFoliage)
+        {
+            float typeOf = 0;
+            SimplexNoise3D_float(float3(posXZ * float2(25, 63), seed), typeOf);
+            typeOf *= 75;
+            int foliageID;
+            if (typeOf < 30)
+                foliageID = 243;
+            else if (typeOf < 45)
+            {
+                bool canSpawnTree = true;
+                int tHeight, index;
+                for (int x = -1; x <= 1; x++)
+                    for (int z = -1; z <= 1; z++)
+                        if (getDensityAtPoint(pos, hm.x, biomeIndex, density, tHeight) && tHeight != roundedHeight)
+                            canSpawnTree = false;
+
+                if (canSpawnTree)
+                    foliageID = 244;
+                else
+                    foliageID = 0;
+            }
+            else if (typeOf < 75)
+                foliageID = 245;
+
+            int counter = 0;
+
+            if (foliageID != 0)
+            {
+                InterlockedAdd(count[1], 1, counter);
+                specialBlocksBuffer[counter] = float4(id + float3(0, 1, 0), foliageID);
+            }
+        }
+    }
+    
+    
+    
+    if (voxelId != 0)
+        InterlockedAdd(count[0], 1);
+    
+    vox.setId(voxelId);
+    voxelArray[flattenCoord(id)] = vox;
+}
+
+[numthreads(8, 8, 8)]
+void ClearArray(uint3 i : SV_DispatchThreadID)
+{
+    float3 id = float3(i);
+    Voxel emptyVoxel;
+    emptyVoxel.voxelData = 0;
+    emptyVoxel.densityData = 0u;
+    emptyVoxel.densityDataB = 0u;
+    voxelArray[flattenCoord(id)] = emptyVoxel;
+}
