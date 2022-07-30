@@ -1,0 +1,142 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &284274408
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 284274409}
+  - component: {fileID: 284274410}
+  - component: {fileID: 4821394917807121045}
+  - component: {fileID: 2020675020}
+  m_Layer: 0
+  m_Name: Modules
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &284274409
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 284274408}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 7385515670266854303}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &284274410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 284274408}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 46b313b94c69bd741919eeddf5a59f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &4821394917807121045
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 284274408}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b4ab811c047c254db9dc8c735e5a9db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &2020675020
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 284274408}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d527e21128b4acb4f98d929468e6e742, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!1 &7385515670266854305
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7385515670266854303}
+  - component: {fileID: 7385515670266854302}
+  m_Layer: 0
+  m_Name: BasicExample
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &7385515670266854303
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7385515670266854305}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children:
+  - {fileID: 284274409}
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7385515670266854302
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7385515670266854305}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ed811cb0aed10748a8cd46333d4fc39, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  worldMaterials:
+  - {fileID: 2100000, guid: d41578d92bc26b04bb2355aed476d2cb, type: 2}
+  - {fileID: 2100000, guid: 313f0b3da4a8a8b4ea348a14fbeb4548, type: 2}
+  voxelDetails:
+  - texture: {fileID: 2800000, guid: 91c8551050efe5b4f98568ab6bb8526a, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 4278218512
+    metallic: 0.1
+    smoothness: 0.1
+  - texture: {fileID: 2800000, guid: e70008fc71970104ba8071fb323a2362, type: 3}
+    color:
+      serializedVersion: 2
+      rgba: 4278223521
+    metallic: 0.1
+    smoothness: 0.1
+  worldSettings:
+    tickTime: 300
+    chunkSize: 32
+    maxHeight: 32
+    renderDistance: 32
+    sharedVertices: 1
+    useTextures: 1
+  contouringShader: {fileID: 7200000, guid: 43aa5c376f0fe5248835aaed4ce1ff8b, type: 3}
+  densityGenerationShader: {fileID: 7200000, guid: 44e554e24ee30ec4c8a613525c60232e,
+    type: 3}
+  maxChunksToProcessPerFrame: 2

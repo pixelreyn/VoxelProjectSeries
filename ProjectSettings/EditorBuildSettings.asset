@@ -6,6 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/VoxelProjectSeries/Scenes/World.unity
+    path: Assets/ReynsVoxelSystem/Scenes/World.unity
     guid: 585e920a0ed93f64e8b93df655b05926
   m_configObjects: {}

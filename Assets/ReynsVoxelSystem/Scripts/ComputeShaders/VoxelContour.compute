@@ -1,0 +1,259 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CalculateVertices
+#pragma kernel SumNormals
+#pragma kernel GenerateFaces
+#include "VoxelValues.cginc"
+#include "SharedVariables.cginc"
+
+struct cellVertex
+{
+    float3 pnt;
+    float3 normal;
+    int sharedCount;
+    int index;
+};
+
+struct normalStruct
+{
+    float3 pnt;
+    float3 vect;
+    float3 normal;
+    bool set;
+};
+
+StructuredBuffer<VoxelDetails> voxelColors;
+RWStructuredBuffer<cellVertex> cellVertices;
+RWStructuredBuffer<float3> normalBuffer;
+RWStructuredBuffer<float3> vertexBuffer;
+RWStructuredBuffer<float4> colorBuffer;
+RWStructuredBuffer<int> indexBuffer;
+RWStructuredBuffer<int> transparentIndexBuffer;
+
+bool smoothNormals;
+bool useTextures;
+
+float packFloats(float xF, float yF)
+{
+    int mix = 0;
+    mix |= int(xF * 100) << 0;
+    mix |= int(yF * 100) << 8;
+    return asfloat(mix);
+}
+
+float3 AppproximateZeroCrossing(float3 adjacentPos, float3 adjacency)
+{
+    float3 pnt, roundedDown, stepF;
+    int3 step;
+    float t = 0, currentT = 0, increment = .25;
+    bool startDensity = false;
+    bool initial = false;
+    while (currentT <= 1)
+    {
+        pnt = adjacentPos + (adjacency - adjacentPos) * currentT;
+        roundedDown = floor(pnt);
+        stepF = (pnt - roundedDown) * 4;
+        step = (int3) stepF;
+
+        if (!initial)
+        {
+            startDensity = voxelArray[flattenCoord(roundedDown)].getVoxelDensity(step.x, step.y, step.z);
+            initial = true;
+        }
+        else
+        {
+            if (voxelArray[flattenCoord(roundedDown)].getVoxelDensity(step.x, step.y, step.z) != startDensity)
+            {
+                t = currentT;
+                break;
+            }
+
+        }
+
+        currentT += increment;
+    }
+    return adjacentPos + (adjacency - adjacentPos) * t;
+}
+
+
+[numthreads(8,8,8)]
+void CalculateVertices (uint3 i : SV_DispatchThreadID)
+{
+    float3 id = float3(i);
+    
+    if (any(id.xz > (int) chunkSizeX + 3) || id.y > chunkSizeY)
+        return;
+    
+    Voxel block = voxelArray[flattenCoord(id)];
+    
+    Voxel adjacentVoxel, adjacentVoxelB;
+    float3 adjacentCell, adjacentCellB, position;
+    int adjacentCellId, adjacentCellBId, currentCellId;
+    int crossings = 0;
+    
+    currentCellId = block.getId();
+    for (int ax = 0; ax < 3; ax++)
+    {
+        for (int corner = 0; corner < 4; corner++)
+        {
+            adjacentCell = id + CellCentersByAxis[ax][corner]; //getCellCenterForIDX(0, ax, corner);
+            adjacentCellB = adjacentCell + axis[ax];
+            
+            adjacentVoxel = voxelArray[flattenCoord(adjacentCell)];
+            adjacentVoxelB = voxelArray[flattenCoord(adjacentCellB)];
+            
+            adjacentCellId = adjacentVoxel.getId();
+            adjacentCellBId = adjacentVoxelB.getId();
+
+            if (currentCellId != 240 && ((adjacentCellBId == 240) || (adjacentCellId == 240)))
+            {
+                if (adjacentCellBId == adjacentCellId == 240)
+                {
+                    adjacentCellId = 0;
+                    adjacentCellBId = 0;
+                }
+                else
+                {
+                    if(adjacentCellBId != 240)
+                        adjacentCellBId = 0;
+                    if(adjacentCellId != 240)
+                        adjacentCellId = 0;
+                }
+            }
+            if (currentCellId == 240 && adjacentCellId != 240)
+                adjacentCellId = 0;
+            if (currentCellId == 240 && adjacentCellBId != 240)
+                adjacentCellBId = 0;
+            
+            adjacentCellId = adjacentCellId != 0 ? 1 : 0;
+            adjacentCellBId = adjacentCellBId != 0 ? 1 : 0;
+            if (adjacentCellId != adjacentCellBId)
+            {
+                float3 adapt = AppproximateZeroCrossing(adjacentCell, adjacentCellB);
+                position += adapt;
+                crossings++;
+            }
+
+        }
+    }
+    
+
+    position /= crossings;
+    
+    position += chunkPosition;
+    cellVertex v;
+    
+    v.pnt = position;
+    v.normal = float3(0,0,0);
+    v.sharedCount = 0;
+    v.index = -1;
+    
+    cellVertices[(flattenCoord(id))] = v;
+}
+
+[numthreads(8, 8, 8)]
+void SumNormals(uint3 i : SV_DispatchThreadID)
+{
+    float3 id = float3(i);
+    if (!smoothNormals || any(id.xz > (int) chunkSizeX + 3) || id.y > chunkSizeY)
+        return;
+    
+    int blockID = voxelArray[flattenCoord(id)].getId();
+    if (blockID == 0)
+        return;
+    
+    normalStruct v[8];
+    for (int m = 0; m < 8; m++)
+    {
+        v[m].pnt = id + voxelVertices[m];
+        v[m].vect = cellVertices[flattenCoord(v[m].pnt)].pnt;
+        v[m].set = true;
+    }
+        
+    for (int face = 0; face < 6; face++)
+    {
+        if (any(id + voxelFaceChecks[face] < 0) ||
+            (voxelArray[flattenCoord(id + voxelFaceChecks[face])].isSolid() && !voxelArray[flattenCoord(id + voxelFaceChecks[face])].isTransparent()))
+            continue;
+
+        if (blockID == 240 && voxelArray[flattenCoord(id + voxelFaceChecks[face])].isTransparent())
+            continue;
+       
+
+        
+        //Calculate this faces normal - add it to the cellVertex normal
+        for (int i = 0; i < 2; i++)
+        {
+            float3 vertA = v[voxelTrisMapped[face][(i * 3 + 0)]].vect;
+            float3 vertB = v[voxelTrisMapped[face][(i * 3 + 1)]].vect;
+            float3 vertC = v[voxelTrisMapped[face][(i * 3 + 2)]].vect;
+                
+            float3 tNormal = cross((vertB - vertA), (vertC - vertA));
+            cellVertices[flattenCoord(v[voxelTrisMapped[face][(i * 3 + 0)]].pnt)].normal += tNormal;
+            cellVertices[flattenCoord(v[voxelTrisMapped[face][(i * 3 + 1)]].pnt)].normal += tNormal;
+            cellVertices[flattenCoord(v[voxelTrisMapped[face][(i * 3 + 2)]].pnt)].normal += tNormal;
+            InterlockedAdd(cellVertices[flattenCoord(v[voxelTrisMapped[face][(i * 3 + 0)]].pnt)].sharedCount, 1);
+            InterlockedAdd(cellVertices[flattenCoord(v[voxelTrisMapped[face][(i * 3 + 1)]].pnt)].sharedCount, 1);
+            InterlockedAdd(cellVertices[flattenCoord(v[voxelTrisMapped[face][(i * 3 + 2)]].pnt)].sharedCount, 1);
+        }
+
+    }
+    
+}
+
+[numthreads(8, 8, 8)]
+void GenerateFaces(uint3 i : SV_DispatchThreadID)
+{
+    float3 id = float3(i);
+    if (any(id.xz > (int) chunkSizeX + 1) || any(id.xz <= 1) || id.y > chunkSizeY)
+        return;
+    
+    Voxel block = voxelArray[flattenCoord(id)];
+    int blockID = block.getId();
+    if (!block.isSolid())
+        return;
+    
+    int vertCount, triCount;
+    int colorFromInt = (voxelColors[blockID - 1].color);
+    float4 color = float4(blockID == 240 ? 240 :
+        (useTextures && voxelColors[blockID - 1].color == -1 ? float(blockID - 1) : colorFromInt),
+        packFloats(voxelColors[blockID - 1].metallic, voxelColors[blockID - 1].smoothness), 0, 0);
+    
+    for (int face = 0; face < 6; face++)
+    {
+        if (any(id + voxelFaceChecks[face] < 0) || voxelArray[flattenCoord(id + voxelFaceChecks[face])].isOpaque())
+            continue;
+
+        if (block.isTransparent() && voxelArray[flattenCoord(id + voxelFaceChecks[face])].isTransparent())
+            continue;
+       
+            
+            InterlockedAdd(count[2], 6, vertCount);
+        
+            if (blockID != 240)
+                InterlockedAdd(count[3], 6, triCount);
+            else
+                InterlockedAdd(count[4], 6, triCount);
+            
+        for (int k = 0; k < 6; k++)
+        {
+
+            cellVertex cv = cellVertices[flattenCoord(id + voxelVertices[voxelTrisMapped[face][k]])];
+            vertexBuffer[vertCount + k] = cv.pnt;
+            
+            if (smoothNormals)
+                normalBuffer[vertCount + k] = normalize(cv.normal / cv.sharedCount);
+            
+            color.b = voxelUVs[voxelTris[k]].x;
+            color.a = voxelUVs[voxelTris[k]].y;
+            colorBuffer[vertCount + k] = color;
+            if (blockID != 240)
+                indexBuffer[triCount + k] = vertCount + k;
+            else
+                transparentIndexBuffer[triCount + k] = vertCount + k;
+        }
+        
+        //Calculate this faces normal - add it to the cellVertex normal
+        
+
+    }
+}
