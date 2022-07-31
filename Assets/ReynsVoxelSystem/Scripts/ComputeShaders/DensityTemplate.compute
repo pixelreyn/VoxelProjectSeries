@@ -17,7 +17,7 @@ void ClearArray(uint3 i : SV_DispatchThreadID)
 
 float getDensity(float3 position, out float theight)
 {
-    float height = (Bcc8NoisePlaneFirst(float3(position.xz / 75, 0)) / 2) + 0.5;
+    float height = (Bcc8NoisePlaneFirst(float3(position.xz / 75, 0)).w / 2) + 0.5;
     height = clamp(height *  20, 1, chunkSizeY);
     theight = floor(height);
     return position.y - height;

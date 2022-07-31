@@ -436,6 +436,8 @@ public class WorldSettings
     public int renderDistance = 32;
     public bool smoothNormals = false;
     public bool useTextures = false;
+    public bool debug = false;
+
     public int ChunkCount
     {
         get { return (chunkSize + 5) *(maxHeight+ 1) * (chunkSize+ 5); }
