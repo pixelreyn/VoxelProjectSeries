@@ -60,7 +60,9 @@ public class Chunk : MonoBehaviour
 
         Vector4[] seedBlocks = new Vector4[specialBlockCount[1]];
         generationBuffer.specialBlocksBuffer.GetData(seedBlocks, 0, 0, specialBlockCount[1]);
-        
+        if (World.WorldSettings.debug)
+            Debug.Log($"Voxel Info for Chunk({chunkPosition}) - Total Solid Voxels: {specialBlockCount[0]},  Special Blocks:{specialBlockCount[1]}");
+
         //Ensure that we have a created dictionary for our modified voxels
         if (!World.Instance.modifiedVoxels.ContainsKey(chunkPosition))
         {
@@ -99,7 +101,6 @@ public class Chunk : MonoBehaviour
                 generationBuffer.voxelArray[kvp.Key] = kvp.Value;
             }
         }
-
         generationBuffer.noiseBuffer.SetData(generationBuffer.voxelArray.array);
 
 
@@ -125,6 +126,9 @@ public class Chunk : MonoBehaviour
         meshData.indices = new int[faceCount[3]];
         meshData.transparentIndices = new int[faceCount[4]];
 
+        if (World.WorldSettings.debug)
+            Debug.Log($"MeshInfo for Chunk({chunkPosition} - Vertices: {faceCount[2]}, Indices: {faceCount[3]}, Transparent Indices: {faceCount[4]}");
+
         //Get all of the meshData from the buffers to local arrays
         meshBuffer.vertexBuffer.GetData(meshData.verts, 0, 0, faceCount[2]);
         meshBuffer.indexBuffer.GetData(meshData.indices, 0, 0, faceCount[3]);
@@ -132,8 +136,8 @@ public class Chunk : MonoBehaviour
         meshBuffer.colorBuffer.GetData(meshData.colors, 0, 0, faceCount[2]);
         if (World.WorldSettings.smoothNormals)
             meshBuffer.normalBuffer.GetData(meshData.norms, 0, 0, faceCount[2]);
-        //Assign the mesh
 
+        //Assign the mesh
         if (mesh is null)
             mesh = new Mesh();
         else
