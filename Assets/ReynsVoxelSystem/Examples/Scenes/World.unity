@@ -459,6 +459,11 @@ PrefabInstance:
     - target: {fileID: 456664884101864728, guid: aa067dc843ecc724c8a2d5cc8bead40b,
         type: 3}
       propertyPath: worldSettings.debug
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 456664884101864728, guid: aa067dc843ecc724c8a2d5cc8bead40b,
+        type: 3}
+      propertyPath: worldSettings.smoothNormals
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 456664884101864729, guid: aa067dc843ecc724c8a2d5cc8bead40b,
@@ -605,6 +610,11 @@ PrefabInstance:
       propertyPath: mainCamera
       value: 
       objectReference: {fileID: 414495109}
+    - target: {fileID: 8910370624794705678, guid: aabe50cdfdf0e7e4bb34b723b8a8cda0,
+        type: 3}
+      propertyPath: worldSettings.smoothNormals
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: aabe50cdfdf0e7e4bb34b723b8a8cda0, type: 3}
 --- !u!1001 &7385515670677126526
@@ -617,7 +627,7 @@ PrefabInstance:
     - target: {fileID: 7385515670266854302, guid: 8ac4a948e5ab16c4bac5ea9ef84221f2,
         type: 3}
       propertyPath: worldSettings.debug
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7385515670266854302, guid: 8ac4a948e5ab16c4bac5ea9ef84221f2,
         type: 3}
@@ -627,7 +637,7 @@ PrefabInstance:
     - target: {fileID: 7385515670266854302, guid: 8ac4a948e5ab16c4bac5ea9ef84221f2,
         type: 3}
       propertyPath: worldSettings.renderDistance
-      value: 2
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 7385515670266854302, guid: 8ac4a948e5ab16c4bac5ea9ef84221f2,
         type: 3}

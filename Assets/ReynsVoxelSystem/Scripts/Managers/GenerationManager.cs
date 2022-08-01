@@ -210,9 +210,9 @@ public class GenerationBuffer : IDisposable
 
     public GenerationBuffer()
     {
-        specialBlocksBuffer = new ComputeBuffer(64, 16, ComputeBufferType.Raw); 
+        specialBlocksBuffer = new ComputeBuffer(64, 16); 
         heightMap = new ComputeBuffer(((World.WorldSettings.chunkSize + 5) * 4) * ((World.WorldSettings.chunkSize + 5) * 4), 8);
-        countBuffer = new ComputeBuffer(5, 4, ComputeBufferType.Raw);
+        countBuffer = new ComputeBuffer(5, 4);
         ClearCountBuffer();
 
         voxelArray = new IndexedArray<Voxel>();
