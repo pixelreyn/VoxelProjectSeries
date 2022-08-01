@@ -1,12 +1,5 @@
 {
   "dependencies": {
-    "com.oddworm.heapexplorer": {
-      "version": "https://github.com/pschraut/UnityHeapExplorer.git#4.0.0",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "b00fee6b4415cb66cfe1664c47e8aa683b834565"
-    },
     "com.unity.asset-store-tools": {
       "version": "file:com.unity.asset-store-tools",
       "depth": 0,
