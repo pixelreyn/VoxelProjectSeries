@@ -305,8 +305,7 @@ public class MeshBuffer
         if (Initialized)
             return;
 
-        countBuffer = new ComputeBuffer(2, 4, ComputeBufferType.Raw);
-        countBuffer.SetCounterValue(0);
+        countBuffer = new ComputeBuffer(2, 4);
         countBuffer.SetData(new uint[] { 0, 0 });
 
         int maxTris = WorldManager.WorldSettings.chunkSize * WorldManager.WorldSettings.maxHeight * WorldManager.WorldSettings.chunkSize / 6;
