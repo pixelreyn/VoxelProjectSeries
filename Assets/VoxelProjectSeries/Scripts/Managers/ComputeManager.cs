@@ -280,7 +280,7 @@ public struct MeshBuffer
 
         vertexBuffer ??= new ComputeBuffer(maxTris*3, 12);
         colorBuffer ??= new ComputeBuffer(maxTris*3, 16);;
-        indexBuffer ??= new ComputeBuffer(maxTris*3, 12);
+        indexBuffer ??= new ComputeBuffer(maxTris*3, 4);
 
         Initialized = true;
     }
