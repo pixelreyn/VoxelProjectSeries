@@ -41,7 +41,7 @@ float fractalNoise(float3 pos, int index, int terrainHeight, bool cave)
         if(cave)
             t += a * cnoise(f * (pos / ((uint) b.caveNoiseScale / (terrainHeight > (int) oceanHeight ? 1 : 6))));
         else
-            t += a * ((Bcc8NoisePlaneFirst(float3((pos.xz / (b.noiseScale)), seed) * f) / 2) + 0.5);
+            t += a * ((Bcc8NoisePlaneFirst(float3((pos.xz / (b.noiseScale)), seed) * f).w / 2) + 0.5);
         f *= 2.0;
         a *= G;
     }
