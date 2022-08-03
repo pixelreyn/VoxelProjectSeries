@@ -268,8 +268,8 @@ public class NoiseBuffer
 
     public void InitializeBuffer()
     {
-        specialBlocksBuffer = new ComputeBuffer(64, 16, ComputeBufferType.Raw);
-        countBuffer = new ComputeBuffer(2, 4, ComputeBufferType.Raw);
+        specialBlocksBuffer = new ComputeBuffer(64, 16);
+        countBuffer = new ComputeBuffer(2, 4);
         countBuffer.SetData(new uint[] {0, 0});
 
         voxelArray = new IndexedArray<Voxel>();
