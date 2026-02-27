@@ -66,11 +66,15 @@ public class TerrainInteractor : MonoBehaviour
     {
         if (Physics.Raycast(new Ray(transform.position, transform.forward), out var hitInfo))
         {
-            if (hitInfo.collider.transform.GetComponent<Chunk>() != null)
+            var chunk = hitInfo.collider.transform.GetComponent<Chunk>();
+            if (chunk != null)
             {
-                ChunkPos = hitInfo.collider.transform.GetComponent<Chunk>().chunkPosition;
-                blockPos = math.floor(hitInfo.point - ChunkPos);
-                if (hitInfo.normal.x != 0)
+                ChunkPos = chunk.chunkPosition;
+                var chunkTransform = hitInfo.collider.transform;
+                Vector3 localHitPoint = chunkTransform.InverseTransformPoint(hitInfo.point);
+                Vector3 localNormal = chunkTransform.InverseTransformDirection(hitInfo.normal).normalized;
+                blockPos = math.floor(localHitPoint - ChunkPos);
+                if (localNormal.x != 0)
                 {
                     blockPos.x = math.round(blockPos.x);
                 }
@@ -78,7 +82,7 @@ public class TerrainInteractor : MonoBehaviour
                 {
                     blockPos.x = math.floor(blockPos.x);
                 }
-                if (hitInfo.normal.y != 0)
+                if (localNormal.y != 0)
                 {
                     blockPos.y = math.round(blockPos.y);
                 }
@@ -86,7 +90,7 @@ public class TerrainInteractor : MonoBehaviour
                 {
                     blockPos.y = math.floor(blockPos.y);
                 }
-                if (hitInfo.normal.z != 0)
+                if (localNormal.z != 0)
                 {
                     blockPos.z = math.round(blockPos.z);
                 }
@@ -97,14 +101,14 @@ public class TerrainInteractor : MonoBehaviour
 
                 if (ReplaceBlockInPlace)
                 {
-                    if (hitInfo.normal.x > 0 || hitInfo.normal.y > 0 || hitInfo.normal.z > 0)
-                        blockPos -= hitInfo.normal;
+                    if (localNormal.x > 0 || localNormal.y > 0 || localNormal.z > 0)
+                        blockPos -= localNormal;
                 }
                 else
                 {
 
-                    if (hitInfo.normal.x < 0 || hitInfo.normal.y < 0 || hitInfo.normal.z < 0)
-                        blockPos += hitInfo.normal;
+                    if (localNormal.x < 0 || localNormal.y < 0 || localNormal.z < 0)
+                        blockPos += localNormal;
                 }
                 return true;
             }
