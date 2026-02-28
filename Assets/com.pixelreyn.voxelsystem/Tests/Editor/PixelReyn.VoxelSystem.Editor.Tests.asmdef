@@ -1,0 +1,14 @@
+{
+    "name": "Juliusdeblaaij.Reynsvoxelsystem.Editor.Tests",
+    "references": [
+        "Juliusdeblaaij.Reynsvoxelsystem.Editor",
+        "Juliusdeblaaij.Reynsvoxelsystem"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}
