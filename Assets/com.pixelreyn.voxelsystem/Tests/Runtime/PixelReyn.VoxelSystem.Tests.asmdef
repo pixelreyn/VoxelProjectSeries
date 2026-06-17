@@ -1,0 +1,11 @@
+{
+    "name": "Juliusdeblaaij.Reynsvoxelsystem.Tests",
+    "references": [
+        "Juliusdeblaaij.Reynsvoxelsystem"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": []
+}

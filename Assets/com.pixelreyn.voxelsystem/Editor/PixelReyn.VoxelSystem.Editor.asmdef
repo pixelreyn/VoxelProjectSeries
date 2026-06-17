@@ -1,0 +1,10 @@
+{
+    "name": "Juliusdeblaaij.Reynsvoxelsystem.Editor",
+    "references": [
+      "Juliusdeblaaij.Reynsvoxelsystem"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}
